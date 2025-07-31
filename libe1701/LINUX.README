@@ -1,0 +1,9 @@
+This folder contains shared libraries (DLL) and link files (LIB)
+for Windows only.
+For software development using Linux no separate link files are
+required, here it is possible to use the normal .SO-files
+directly.
+So for Linux development, download a suitable software package
+from https://halaser.systems/download.php and link against the
+contained runtime-so-files (suitable Makefiles can be found in
+source examples).
