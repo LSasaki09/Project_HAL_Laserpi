@@ -129,27 +129,27 @@ def get_spot_coordinates_pixels(frame):
 
 def get_relative_marker_centers(frame, mtx, dist, reference_id, marker_length_mm=24.0):
     """
-    Retourne les positions des centres des marqueurs ArUco par rapport au référentiel du marqueur de référence.
+    Returns the positions of ArUco marker centers relative to the reference marker’s coordinate system.
 
-    Paramètres :
-    - frame : Image d’entrée (RGB, par exemple depuis Picamera2).
-    - mtx : Matrice de la caméra.
-    - dist : Coefficients de distorsion.
-    - reference_id : ID du marqueur de référence.
-    - marker_length_mm : Longueur du côté du marqueur en mm (par défaut : 24.0 mm).
+    Parameters:
+    - frame: Input image (RGB, e.g., from Picamera2).
+    - mtx: Camera matrix.
+    - dist: Distortion coefficients.
+    - reference_id: ID of the reference marker.
+    - marker_length_mm: Side length of the marker in millimeters (default: 24.0 mm).
 
-    Retours :
-    - relative_centers : Liste de tuples [(x_mm, y_mm), ...] des centres dans le référentiel du marqueur de référence.
-    - ids : Tableau des IDs des marqueurs détectés.
-    - frame : Image annotée avec les marqueurs détectés.
+    Returns:
+    - relative_centers: List of tuples [(x_mm, y_mm), ...] of centers in the reference marker’s coordinate system.
+    - ids: Array of detected marker IDs.
+    - frame: Annotated image with detected markers.
     """
-    # Détecter les marqueurs ArUco
-    _, ids, corners, frame = detect_aruco_markers(frame,"mm", mtx, dist, marker_length_mm)
+    # Detect ArUco markers
+    _, ids, corners, frame = detect_aruco_markers(frame, "mm", mtx, dist, marker_length_mm)
     
     relative_centers = []
     
     if ids is not None:
-        # Trouver l’index du marqueur de référence
+        # Find the index of the reference marker
         ref_index = None
         for i, marker_id in enumerate(ids.flatten()):
             if marker_id == reference_id:
@@ -157,30 +157,30 @@ def get_relative_marker_centers(frame, mtx, dist, reference_id, marker_length_mm
                 break
         
         if ref_index is not None:
-            # Calculer l’homographie pour le marqueur de référence
+            # Compute the homography for the reference marker
             H = get_marker_homography(corners[ref_index], marker_length_mm)
             
-            # go through all detected markers
+            # Iterate through all detected markers
             for i in range(len(ids)):
-
                 marker_corners = corners[i][0]
-                center_px = np.mean(marker_corners, axis=0)  # [x, y] en pixels
+                center_px = np.mean(marker_corners, axis=0)  # [x, y] in pixels
                 
-                # convert pixel coordinates to mm using the homography
+                # Convert pixel coordinates to millimeters using the homography
                 x_mm, y_mm = pixel_to_mm(center_px, H)
                 relative_centers.append((x_mm, y_mm))
                 
-                print(f"Marqueur {ids[i][0]} : Centre à ({x_mm:.2f}, {y_mm:.2f}) mm par rapport au marqueur {reference_id}")
+                print(f"Marker {ids[i][0]}: Center at ({x_mm:.2f}, {y_mm:.2f}) mm relative to marker {reference_id}")
         else:
-            print(f"Le marqueur de référence avec l’ID {reference_id} n’a pas été détecté.")
+            print(f"Reference marker with ID {reference_id} was not detected.")
     else:
-        print("Aucun marqueur détecté.")
+        print("No markers detected.")
     
     return relative_centers, ids, frame
 
 
+
 def show_spot(mtx,dist, picam2,unit="mm", marker_length_mm=24.0, reference_id=23):
-    # Display the laser spot position on the camera feed.
+    # Display the laser spot position on the camera feed depending on the reference ID (in mm)
     frame = picam2.capture_array()
     centers,ids,corners,frame = detect_aruco_markers(frame,unit, mtx, dist, marker_length_mm)
     spotx_mm, spoty_mm, px, py, _ = get_spot_coordinates(frame, corners, marker_length_mm, ids, reference_id)

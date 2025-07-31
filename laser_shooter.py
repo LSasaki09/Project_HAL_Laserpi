@@ -29,7 +29,7 @@ if __name__ == "__main__":
         reference_id = 23  # ID of the reference marker to detect
 
     elif unit == "pixels":
-        cardNum = lc.init_laser(port_name="/dev/ttyACM0", freq=10000, jump_speed=4294960000//10, mark_speed=50000,
+        cardNum = lc.init_laser(port_name="/dev/ttyACM0", freq=10000, jump_speed=4294960000//10, mark_speed=4294960000//100000,
                                 corr_file="corr_file_v5.bco")
     else:
         print("ERROR: Invalid unit. Use 'mm' or 'pixels'.")
@@ -44,7 +44,7 @@ if __name__ == "__main__":
                                                                                 marker_length_mm)
             elif unit == "pixels":
                 centers, ids,corners, frame = pf.detect_aruco_markers(frame,unit)
-            time.sleep(0.3) 
+            time.sleep(0.1) 
 
             if ids is not None and len(centers) > 0:
 
@@ -52,11 +52,10 @@ if __name__ == "__main__":
 
                 #sf.go_to_several_points_without_cam(cardNum,centers,unit,pattern_name,"scanner_camera_map.csv")
                 
-                sf.go_to_aruco(cardNum, corners, unit, pattern_name)
+                #sf.go_to_aruco(cardNum, corners, unit, pattern_name)
 
                 print("Laser moved to detected marker positions.")
                 #cv2.imshow("Laser shooting", frame)
-                time.sleep(2)
                 break
             else:
                 print("No markers detected.")

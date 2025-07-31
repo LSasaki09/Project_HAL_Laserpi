@@ -52,7 +52,6 @@ def init_laser(port_name= "/dev/ttyACM0", freq = 10000, jump_speed = MAX_SPEED//
     return cardNum
 
 
-
 def wait_marking(cardNum):
     """Wait until the marking is done."""
     state = libe1701py.get_card_state(cardNum)

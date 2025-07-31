@@ -262,35 +262,31 @@ def plot_points_mm_bits(xy,bit_xy, unit="mm"):
 
 
 def project_to_bits(x, y, xy_norm, bit_xy_norm, xy_min, xy_max, bit_scale):
-    
-    
-    # Normalisation des entrées
-    x_norm = (x - xy_min[0]) / ( xy_max[0] - xy_min[0])
-    y_norm = (y - xy_min[1]) / (xy_max[0] - xy_min[1])
-    
-    # Vérification si les valeurs normalisées sont dans [0, 1]
+    # Normalize inputs
+    x_norm = (x - xy_min[0]) / (xy_max[0] - xy_min[0])
+    y_norm = (y - xy_min[1]) / (xy_max[1] - xy_min[1])
+
+    # Check if normalized values are within [0, 1]
     if not (0 <= x_norm <= 1 and 0 <= y_norm <= 1):
-        print("Attention : Les coordonnées (x, y) sont hors de la plage des données. Le résultat peut être imprécis.")
-    
-    # Interpolation avec les données normalisées
+        print("Warning: (x, y) coordinates are outside the data range. The result may be inaccurate.")
+
+    # Interpolate using normalized data
     bit_x_norm = griddata(xy_norm, bit_xy_norm[:, 0], (x_norm, y_norm), method='cubic')
     bit_y_norm = griddata(xy_norm, bit_xy_norm[:, 1], (x_norm, y_norm), method='cubic')
-    
-    # Gestion des valeurs NaN
+
+    # Handle NaN results
     if np.isnan(bit_x_norm) or np.isnan(bit_y_norm):
-        print("Erreur : L'interpolation a échoué. Vérifiez la plage des données.")
+        print("Error: Interpolation failed. Check the data range.")
         return None, None
-    
-    # Dénormalisation des résultats
+
+    # Denormalize outputs
     bit_x = bit_x_norm * bit_scale
     bit_y = bit_y_norm * bit_scale
-    
+
     return int(bit_x), int(bit_y)
 
 
-
-
-def draw_square_world_frame(cardNum, square_size, x0, y0, mm_xy_norm=None, bit_xy_norm=None, mm_min=None, mm_max=None, bit_scale=None):
+def draw_square_world_frame(cardNum, square_size, x0, y0, xy_norm=None, bit_xy_norm=None, mm_min=None, mm_max=None, bit_scale=None):
     """
     Draw a square in the world frame (mm) by converting coordinates to laser frame (bits) using interpolation.
     
@@ -298,7 +294,7 @@ def draw_square_world_frame(cardNum, square_size, x0, y0, mm_xy_norm=None, bit_x
     - cardNum: Laser card identifier.
     - square_size: Side length of the square in millimeters.
     - x0, y0: Center of the square in mm or pixels
-    - mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale: Parameters for interpolation.
+    - xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale: Parameters for interpolation.
     """
     half_size = square_size / 2
     
@@ -310,7 +306,7 @@ def draw_square_world_frame(cardNum, square_size, x0, y0, mm_xy_norm=None, bit_x
         (x0 + half_size, y0 - half_size),  # Bottom-right corner
         (x0 - half_size, y0 - half_size)   # Back to bottom-left corner
     ]
-    x_center, y_center = project_to_bits(x0, y0, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
+    x_center, y_center = project_to_bits(x0, y0, xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
     
     if x_center is None or y_center is None:
         print(f"Projection failed for the center ({x0}, {y0}).")
@@ -319,7 +315,7 @@ def draw_square_world_frame(cardNum, square_size, x0, y0, mm_xy_norm=None, bit_x
     # Convert corners to laser coordinates (bits) using interpolation
     corners_bits = []
     for x_mm, y_mm in corners_mm:
-        x_bit, y_bit = project_to_bits(x_mm, y_mm, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
+        x_bit, y_bit = project_to_bits(x_mm, y_mm, xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
         
         if x_bit is None or y_bit is None:
             print(f"Projection failed for ({x_mm}, {y_mm}). Stopping drawing.")
@@ -337,7 +333,6 @@ def draw_square_world_frame(cardNum, square_size, x0, y0, mm_xy_norm=None, bit_x
     libe1701py.execute(cardNum)
     
     lc.wait_marking(cardNum)
-
 
 
 def draw_pattern(cardNum, square_size,pattern_name,x0, y0, xy_norm=None, bit_xy_norm=None, min_coord=None, max_coord=None, bit_scale=None):
@@ -519,29 +514,29 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
 
     # Activate the laser
     libe1701py.jump_abs(cardNum, x_center, y_center, 0)
-    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+    #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
 
     # Draw the pattern
     for x_bit, y_bit in goal_pts_bits:
         libe1701py.mark_abs(cardNum, x_bit, y_bit, 0)
 
-    libe1701py.execute(cardNum)
-    lc.wait_marking(cardNum)
-    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
+    #libe1701py.execute(cardNum)
+    #lc.wait_marking(cardNum)
+    #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
 
 
 
-def go_to_several_points_without_cam(cardNum, points_mm,unit = "mm",pattern_name = "square", csv_path="scanner_camera_map.csv"):
+def go_to_several_points_without_cam(cardNum, points,unit = "mm",pattern_name = "square", csv_path="scanner_camera_map.csv"):
     """
-    Point the laser to a list of points in the world frame (mm) in order, using interpolation.
+    Point the laser to a list of points in the world frame  using interpolation.
     
     Parameters:
     - cardNum: Laser card identifier.
-    - points_mm: List of tuples (x_mm, y_mm) representing points in the world frame (mm).
+    - points: List of tuples (x_coord, y_coord) representing points in the world frame (mm) or (pixels).
     - csv_path: Path to calibration CSV file.
     """
 
-    mm_xy, bit_xy, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale = load_data(unit,csv_path)
+    coord_xy, bit_xy, xy_norm, bit_xy_norm, pt_min, pt_max, bit_scale = load_data(unit,csv_path)
 
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
     
@@ -551,24 +546,23 @@ def go_to_several_points_without_cam(cardNum, points_mm,unit = "mm",pattern_name
     time.sleep(0.1)
     
     # Convert and point to each point
-    for x_mm, y_mm in points_mm:
-        x_bit, y_bit = project_to_bits(x_mm, y_mm, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
+    for x_coord, y_coord in points:
+        x_bit, y_bit = project_to_bits(x_coord, y_coord, xy_norm, bit_xy_norm, pt_min, pt_max, bit_scale)
 
         if x_bit is None or y_bit is None:
-            print(f"Échec de la projection pour ({x_mm}, {y_mm}). Arrêt du déplacement.")
+            print(f"Échec de la projection pour ({x_coord}, {y_coord}). Arrêt du déplacement.")
             libe1701py.close(cardNum)
             return
-        print(f"Pointing to ({x_mm}, {y_mm}) -> ({x_bit}, {y_bit})")
+        print(f"Pointing to ({x_coord}, {y_coord}) -> ({x_bit}, {y_bit})")
 
         libe1701py.jump_abs(cardNum, x_bit, y_bit, 0)
         #libe1701py.mark_abs(cardNum, x_bit, y_bit, 0)
         libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
         
-        #draw_square_world_frame (cardNum, 18, x_mm, y_mm, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
+        #draw_square_world_frame (cardNum, 18, x_coord, y_coord, xy_norm, bit_xy_norm, pt_min, pt_max, bit_scale)
         square_size = 100
 
-        #draw_pattern(cardNum,square_size, pattern_name,x_mm, y_mm, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
-        #draw_pattern_chat(cardNum,corners, pattern_name,x_mm, y_mm, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
+        #draw_pattern(cardNum,square_size, pattern_name,x_coord, y_coord, xy_norm, bit_xy_norm, pt_min, t_max, bit_scale)
         
         libe1701py.execute(cardNum)
         lc.wait_marking(cardNum)
@@ -578,7 +572,7 @@ def go_to_several_points_without_cam(cardNum, points_mm,unit = "mm",pattern_name
     libe1701py.execute(cardNum)
     time.sleep(0.05)
     lc.wait_marking(cardNum)
-    time.sleep(0.1)
+    time.sleep(0.05)
     libe1701py.close(cardNum)
 
 
@@ -598,7 +592,7 @@ def go_to_aruco(cardNum, corners_list, unit="mm", pattern_name="square", csv_pat
     # Go to initial position (0, 0) in laser reference frame
     libe1701py.jump_abs(cardNum, 0, 0, 0)
     libe1701py.execute(cardNum)
-    time.sleep(0.1)
+    #time.sleep(0.1)
 
     # Draw pattern for each marker's corners
     for corners in corners_list:
@@ -612,6 +606,10 @@ def go_to_aruco(cardNum, corners_list, unit="mm", pattern_name="square", csv_pat
         print(f"Drawing {pattern_name} at center ({center_x:.2f}, {center_y:.2f})")
 
         draw_pattern_in_aruco(cardNum, pattern_name, corners, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+
+    
+    libe1701py.execute(cardNum)
+    lc.wait_marking(cardNum)
 
     time.sleep(0.1)
     libe1701py.close(cardNum)
@@ -632,35 +630,31 @@ if __name__ == "__main__":
 
     #Collect calibration points (if needed)
     #collect_pts_calib_scanner(unit)
-    
+
     # Path to CSV file
     csv_path = "scanner_camera_map.csv"
     #disc_first_n = 0
 
-    mm_xy, bit_xy, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale = load_data(unit, csv_path)
+    xy_coord, bit_xy, xy_norm, bit_xy_norm, pt_min, pt_max, bit_scale = load_data(unit, csv_path)
     
     # Plot points for visualization
-    plot_points(mm_xy, bit_xy, unit)
-    plot_points_mm_bits(mm_xy, bit_xy, unit)
+    plot_points(xy_coord, bit_xy, unit)
+    plot_points_mm_bits(xy_coord, bit_xy, unit)
 
     cardNum=lc.init_laser(port_name="/dev/ttyACM0", freq=10000, jump_speed=4294960000//10, mark_speed=5000,
                         corr_file=corr_file)
 
-    # Test coordinates
-    #test_mm = (30, 30)
-    #go_to_pos(test_mm, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
-
     #Square drawing test
     px_test = 1000
     py_test = 800
-    draw_square_world_frame(cardNum, 300,px_test,py_test, mm_xy_norm, bit_xy_norm, mm_min, mm_max, bit_scale)
+    draw_square_world_frame(cardNum, 300,px_test,py_test, xy_norm, bit_xy_norm, pt_min, pt_max, bit_scale)
 
     # Go to several arbitrary points test
-    points_mm = [
+    points = [
         (30, 0),
         (30, 30),
         (0, 30),
         (0, 0)
     ]
-   # go_to_several_points_without_cam(cardNum, points_mm,unit)
+   # go_to_several_points_without_cam(cardNum, points,unit)
 
