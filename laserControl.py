@@ -100,11 +100,6 @@ def draw_grid_pts(cardNum, grid_size=3 , bit_range = 67108860//2):
         libe1701py.execute(cardNum)
         time.sleep(0.3)
 
-        # Turn off laser
-        #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
-        #libe1701py.execute(cardNum)
-        #time.sleep(laser_on_duration)
-
         wait_marking(cardNum)
 
         print(f"Point ({bx}, {by}) processed.")
