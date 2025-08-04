@@ -31,7 +31,7 @@ def collect_pts_calib_scanner(unit="mm"):
     z = 0  # we assume 2D laser control 
     jump_speed = MAX_SPEED//10
     mark_speed = 50000
-    laser_on_duration = 0.4  # seconds
+    laser_on_duration = 0.3  # seconds
     freq = 10000 #20000.0  # Hz, laser frequency
 
     # === ArUco marker config ===
@@ -359,6 +359,7 @@ def draw_pattern(cardNum, square_size,pattern_name,x0, y0, xy_norm=None, bit_xy_
             y = y0 + radius * np.sin(angle)
             goal_pts.append((x, y))
 
+
     elif pattern_name == "sandglass":
         goal_pts = [
             (x0 - half_size, y0 + half_size),  
@@ -452,8 +453,8 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
         goal_pts = corners.tolist() + [corners[0].tolist()]  # Close the loop
 
     elif pattern_name == "spiral":
-        n_turns = 4  # Number of spiral turns
-        points_per_turn = 36  # Points per turn
+        n_turns = 5  # Number of spiral turns
+        points_per_turn = 18  # Points per turn (pts every 20 degrees)
         total_points = n_turns * points_per_turn
         goal_pts_unit = []
         for i in range(total_points):
@@ -465,6 +466,24 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
         # Transform points to marker space
         goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
         goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
+
+    elif pattern_name == "several_spirals":
+        n_turns = 4  # Number of spiral turns
+        points_per_turn = 18  # Points per turn
+        total_points = n_turns * points_per_turn
+        goal_pts_unit = []
+        for j in range (10):
+            for i in range(total_points):
+                angle = (i / points_per_turn) * 2 * np.pi
+                radius = (i / total_points) * 0.5  # Max radius is 0.5 to stay within unit square
+                x = 0.5 + radius * np.cos(angle)  # Center at (0.5, 0.5)
+                y = 0.5 + radius * np.sin(angle)
+                goal_pts_unit.append([x, y])
+        # Transform points to marker space
+        goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
+        goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
+
+
     elif pattern_name == "sandglass":
         # Use the exact corners in sandglass order
         goal_pts = [
@@ -474,6 +493,8 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
             corners[3].tolist(),  # Bottom-right
             corners[1].tolist()   # Back to top-left
         ]
+    
+
     elif pattern_name == "zigzag":
         n_lines = 5  # Number of diagonal lines
         goal_pts_unit = []
@@ -629,7 +650,7 @@ if __name__ == "__main__":
         exit(1)
 
     #Collect calibration points (if needed)
-    #collect_pts_calib_scanner(unit)
+    collect_pts_calib_scanner(unit)
 
     # Path to CSV file
     csv_path = "scanner_camera_map.csv"
