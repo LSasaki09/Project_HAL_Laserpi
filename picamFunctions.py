@@ -3,6 +3,7 @@ from cv2 import aruco
 import numpy as np
 from picamera2 import Picamera2
 import yaml
+import time
 
 
 def init_camera():
@@ -186,7 +187,7 @@ def show_spot(mtx,dist, picam2,unit="mm", marker_length_mm=24.0, reference_id=23
     spotx_mm, spoty_mm, px, py, _ = get_spot_coordinates(frame, corners, marker_length_mm, ids, reference_id)
     print(f"Laser spot at: ({spotx_mm:.2f}, {spoty_mm:.2f}) mm → Pixel: ({px}, {py})")
     cv2.circle(frame, (int(px), int(py)), 10, (0, 0, 255), 2)
-    cv2.imshow('ArUco Detection', frame)
+    cv2.imshow('Spot detection', frame)
     cv2.waitKey(50)  # Pause to observe
 
 
@@ -197,8 +198,8 @@ def live_cam(picam):
     print("🟢 Press 'q' to quit")
     while True:
         frame = picam.capture_array()
-        cv2.imshow("Live Camera Feed", frame)
-
+        small = cv2.resize(frame, (640, 480)) 
+        cv2.imshow("Live Camera Feed", small)
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             break
@@ -239,10 +240,12 @@ def aruco_detection(picam2, mtx, dist):
 
                 # Coordinates of the marker's center (in cm if marker_length is in cm)
                 center = tvecs[i][0]
-                #print(f"Marker {ids[i][0]}: Center at ({center[0]:.2f}, {center[1]:.2f}, {center[2]:.2f}) cm")
+                print(f"Marker {ids[i][0]}: Center at ({center[0]:.2f}, {center[1]:.2f}, {center[2]:.2f}) cm")
+                time.sleep(0.2)  # Pause to observe the marker detection
 
         # Display the image
-        cv2.imshow('ArUco Detection', frame)
+        small = cv2.resize(frame, (640, 480))  
+        cv2.imshow('ArUco Detection', small)
 
         # Quit with the 'q' key
         if cv2.waitKey(1) & 0xFF == ord('q'):

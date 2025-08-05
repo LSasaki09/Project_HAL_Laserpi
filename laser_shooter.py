@@ -16,15 +16,15 @@ if __name__ == "__main__":
     
     unit = "pixels"  # "pixels" or "mm"
 
-    pattern_name = "spiral" #Supported patterns: square, spiral, sandglass, zigzag, several_spirals
+    pattern_name = "several_sandglasses" #Supported patterns: square, spiral, sandglass, zigzag, several_spirals, "several_sandglasses"
 
     # Initialize the camera
     picam2, mtx, dist = pf.init_camera()
-    time.sleep(1)
+    time.sleep(0.5)
 
     #Scanner parameters
-    mark_speed = 50000 #50000  # Speed for marking in bits per second (max spped = 4294960000)
-    freq = 10000  # Frequency for laser in Hz
+    mark_speed = 500000 #50000  # Speed for marking in bits per second (max spped = 4294960000)
+    freq = 10000//7 # Frequency for laser in Hz
     jump_speed = 4294960000 // 10  # Jump speed in bits per second
     port_name="/dev/ttyACM0"
 
@@ -52,22 +52,31 @@ if __name__ == "__main__":
                 centers, ids, frame = pf.get_relative_marker_centers(frame, mtx, dist, reference_id, 
                                                                                 marker_length_mm)
             elif unit == "pixels":
-                centers, ids,corners, frame = pf.detect_aruco_markers(frame,unit)
+                marker_length = 35 # in mm
+                centers, ids,corners, frame = pf.detect_aruco_markers(frame,unit,0,0,marker_length)
             time.sleep(0.1) 
 
             if ids is not None and len(centers) > 0:
 
                 #sf.go_to_several_points_without_cam(cardNum,centers,unit,pattern_name,"scanner_camera_map.csv")
                 
-                sf.go_to_aruco(cardNum, corners, unit, pattern_name)
+                #sf.go_to_aruco(cardNum, corners, unit, pattern_name)
+
+                #Live tracking laser aruco marker
+                track_id = 31 #34
+                #sf.live_tracking_px(cardNum,picam2,track_id)
+                sf.live_tracking_px_predict(cardNum, picam2, track_id)
+
 
                 print("Laser moved to detected marker positions.")
                 #cv2.imshow("Laser shooting", frame)
                 break
             else:
                 print("No markers detected.")
-            
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+
+            if  0xFF == ord('q'):
+                sf.close_all_devices(cardNum, picam2)
+                exit(0)  # Exit if 'q' is pressed
                 break
 
             time.sleep(0.1) 

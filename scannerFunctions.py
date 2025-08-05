@@ -14,7 +14,7 @@ from scipy.interpolate import griddata
 
 def close_all_devices(cardNum, picam2):
 
-    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
     libe1701py.close(cardNum)
     picam2.stop()
     cv2.destroyAllWindows()
@@ -31,7 +31,7 @@ def collect_pts_calib_scanner(unit="mm"):
     z = 0  # we assume 2D laser control 
     jump_speed = MAX_SPEED//10
     mark_speed = 50000
-    laser_on_duration = 0.3  # seconds
+    laser_on_duration = 0.2  # seconds
     freq = 10000 #20000.0  # Hz, laser frequency
 
     # === ArUco marker config ===
@@ -417,6 +417,7 @@ def draw_pattern(cardNum, square_size,pattern_name,x0, y0, xy_norm=None, bit_xy_
 
 
 
+
 def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_norm=None, min_coord=None, max_coord=None, bit_scale=None):
     """
     Draw a pattern within the boundaries defined by an ArUco marker's corners, respecting its orientation.
@@ -493,6 +494,18 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
             corners[3].tolist(),  # Bottom-right
             corners[1].tolist()   # Back to top-left
         ]
+
+    elif pattern_name == "several_sandglasses":
+        goal_pts = []
+        base_pattern = [
+            corners[1].tolist(),  # Top-left
+            corners[2].tolist(),  # Top-right
+            corners[0].tolist(),  # Bottom-left
+            corners[3].tolist(),  # Bottom-right
+            corners[1].tolist()   # Back to top-left
+        ]
+        for _ in range(20):
+            goal_pts.extend(base_pattern)
     
 
     elif pattern_name == "zigzag":
@@ -533,8 +546,9 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
             return
         goal_pts_bits.append((x_bit, y_bit))
 
-    # Activate the laser
-    libe1701py.jump_abs(cardNum, x_center, y_center, 0)
+
+    #libe1701py.jump_abs(cardNum, x_center, y_center, 0)
+
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
 
     # Draw the pattern
@@ -636,6 +650,166 @@ def go_to_aruco(cardNum, corners_list, unit="mm", pattern_name="square", csv_pat
     libe1701py.close(cardNum)
 
 
+
+def live_tracking_px(cardNum,picam2,track_id, csv_path="scanner_camera_map.csv"):
+
+    unit = "pixels"  
+    coord_xy, bit_xy, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale = load_data(unit, csv_path)
+    pixel_threshold = 1  # 
+    x_center_old, y_center_old = 0., 0.  # Previous center coordinates
+
+    # Go to initial position (0, 0) in laser reference frame
+    #libe1701py.jump_abs(cardNum, 0, 0, 0)
+    #libe1701py.execute(cardNum)
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+    libe1701py.execute(cardNum)
+
+
+    while True:
+        frame = picam2.capture_array()
+        centers, ids,corners_list, frame = pf.detect_aruco_markers(frame,unit)
+
+        small = cv2.resize(frame, (640, 480)) 
+        cv2.imshow("Live Camera Feed", small)
+
+        if track_id in ids:
+            index = np.where(ids == track_id)[0][0]
+            corners = corners_list[index].reshape(4, 2)
+            center_x = np.mean(corners[:, 0])
+            center_y = np.mean(corners[:, 1])
+            x_bit, y_bit = project_to_bits(center_x, center_y, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+            
+            if x_bit is None or y_bit is None:
+                print(f"Projection failed for center ({center_x:.2f}, {center_y:.2f}). Skipping.")
+                continue
+            
+            #print(f"Tracking ID {track_id} at ({center_x:.2f}, {center_y:.2f}) → ({x_bit}, {y_bit})")
+
+            if abs(center_x - x_center_old) < pixel_threshold and abs(center_y - y_center_old) < pixel_threshold:
+                #print(f"ID {track_id} is stationary. Waiting for movement...")
+                x_center_old, y_center_old = center_x, center_y
+                libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+                libe1701py.execute(cardNum)
+                #draw_pattern_in_aruco(cardNum, "sandglass", corners, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+                continue
+
+            #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+            libe1701py.mark_abs(cardNum, x_bit, y_bit, 0)
+
+            #libe1701py.jump_abs(cardNum, x_bit, y_bit, 0)
+            #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+            #draw_pattern_in_aruco(cardNum, "sandglass", corners, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+
+            libe1701py.execute(cardNum)
+            lc.wait_marking(cardNum)
+
+            x_center_old, y_center_old = center_x, center_y
+
+
+        else:
+            libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+            libe1701py.execute(cardNum)
+            print(f"ID {track_id} not detected. Waiting for detection...")
+
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):  
+            break
+
+        time.sleep(0.01)
+
+    libe1701py.close(cardNum)
+    cv2.destroyAllWindows()
+
+
+
+def live_tracking_px_predict(cardNum, picam2, track_id, csv_path="scanner_camera_map.csv"):
+    unit = "pixels"
+    coord_xy, bit_xy, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale = load_data(unit, csv_path)
+    pixel_threshold = 1  # Threshold to detect movement
+    delay = 0.1  # Estimated total delay in seconds
+
+    # Initialize position history
+    prev_center = None
+    prev_time = None
+
+    # Turn on the laser
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+    libe1701py.execute(cardNum)
+
+    while True:
+        current_time = time.time()
+        frame = picam2.capture_array()
+        centers, ids, corners_list, frame = pf.detect_aruco_markers(frame, unit)
+
+        small = cv2.resize(frame, (640, 480))
+        cv2.imshow("Live Camera Feed", small)
+
+        if track_id in ids:
+            index = np.where(ids == track_id)[0][0]
+            corners = corners_list[index].reshape(4, 2)
+            center_x = np.mean(corners[:, 0])
+            center_y = np.mean(corners[:, 1])
+            current_center = np.array([center_x, center_y])
+
+            # Project current position to bits
+            x_bit, y_bit = project_to_bits(center_x, center_y, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+
+            if x_bit is None or y_bit is None:
+                print(f"Projection failed for center ({center_x:.2f}, {center_y:.2f}). Skipping.")
+                continue
+
+            # First detection: initialize previous position and time
+            if prev_center is None:
+                prev_center = current_center
+                prev_time = current_time
+                continue
+
+            # Calculate velocity (pixels per second)
+            dt = current_time - prev_time
+            velocity = (current_center - prev_center) / dt if dt > 0 else np.array([0, 0])
+
+            # Predict future position
+            future_center = current_center + velocity * delay
+            future_x, future_y = future_center
+
+            # Project future position to bits
+            future_x_bit, future_y_bit = project_to_bits(future_x, future_y, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+
+            if future_x_bit is None or future_y_bit is None:
+                print(f"Projection failed for future center ({future_x:.2f}, {future_y:.2f}). Skipping.")
+                continue
+
+            print(f"Tracking ID {track_id} at ({center_x:.2f}, {center_y:.2f}) → Predicted ({future_x:.2f}, {future_y:.2f}) → ({future_x_bit}, {future_y_bit})")
+
+            if abs(current_center[0] - prev_center[0]) < pixel_threshold and abs(current_center[1] - prev_center[1]) < pixel_threshold:
+                #print(f"ID {track_id} is stationary. Waiting for movement...")
+                libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+                libe1701py.execute(cardNum)
+                #draw_pattern_in_aruco(cardNum, "sandglass", corners, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+                continue
+            
+            # Move to predicted position
+            libe1701py.mark_abs(cardNum, future_x_bit, future_y_bit, 0)
+            libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+            libe1701py.execute(cardNum)
+            lc.wait_marking(cardNum)
+
+            # Update previous position and time
+            prev_center = current_center
+            prev_time = current_time
+
+        else:
+            libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+            libe1701py.execute(cardNum)
+            print(f"ID {track_id} not detected. Waiting for detection...")
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        time.sleep(0.01)
+
+    libe1701py.close(cardNum)
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
 

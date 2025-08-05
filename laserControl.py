@@ -1,7 +1,7 @@
 import time
 import libe1701py
 import serial.tools.list_ports
-
+#Hello world
 MAX_SPEED = 4294960000
 MAX_POS = 67108860  # 2^26, for 26-bit precision
 #freq = 10000 #20000.0  # Hz, laser frequency
@@ -29,7 +29,7 @@ def test_connection():
     return cardNum
 
 def init_laser(port_name= "/dev/ttyACM0", freq = 10000, jump_speed = MAX_SPEED//100, mark_speed = 50000,
-                corr_file="corr_file_v4.bco"):
+                corr_file="corr_file_v5.bco"):
 
     """Initialize the laser with the given parameters."""
     # ==== Setup scanner ====
@@ -61,7 +61,7 @@ def wait_marking(cardNum):
 
     # Wait for marking to complete
     while (state & (libe1701py.E170X_CSTATE_MARKING | libe1701py.E170X_CSTATE_PROCESSING)) != 0:
-        time.sleep(0.05)
+        time.sleep(0.01)
         state = libe1701py.get_card_state(cardNum)
 
 

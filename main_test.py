@@ -6,13 +6,32 @@ import cv2
 import numpy as np
 import time
 
+import Tampon_file as tf
+
+def on_off_laser (cardNum):
+    libe1701py.jump_abs(cardNum, 0, 0, 0)
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")  # Turn on laser
+    libe1701py.execute(cardNum)
+    print("Laser turned on.")
+    time.sleep(3)
+    print("Laser turned off.")
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, '0')  # Turn off laser
+    #libe1701py.jump_abs(cardNum, 0, 0, 0)
+    libe1701py.execute(cardNum)
+    time.sleep(3)
+    #libe1701py.jump_abs(cardNum, 0, 0, 0)
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")  # Turn on laser
+    libe1701py.execute(cardNum)
+    print("Laser turned on.")
+    time.sleep(3)
+
 
 
 if __name__ == "__main__":
 
     # Initialize the camera
     picam2, mtx, dist = pf.init_camera()
-    time.sleep(2)
+    time.sleep(1)
 
     # Initialize the laser
     cardNum = lc.init_laser(port_name="/dev/ttyACM0", freq=10000, jump_speed=4294960000//10, mark_speed=50000)
@@ -24,7 +43,7 @@ if __name__ == "__main__":
 
     '''camera test'''
     # ArUco detection test
-    pf.aruco_detection(picam2, mtx, dist)
+    #pf.aruco_detection(picam2, mtx, dist)
 
     #pf.live_cam(picam2)
 
@@ -33,6 +52,19 @@ if __name__ == "__main__":
     #square_size = 67108860 
     #lc.test_connection()
     #lc.draw_square(cardNum, square_size, 0, 0) #draw a squrae in bit coordinates
+    
+
+    timestamps = tf.measure_communication_delay(cardNum, picam2)
+    
+    # Print the timestamps
+    print("Timestamps for communication delay measurement:")
+    for i, ts in enumerate(timestamps):
+        print(f"Measurement {i}: {ts:.6f} ")
+    
+
+
+    sf.close_all_devices(cardNum, picam2)
+
 
 
 
