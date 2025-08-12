@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     #Scanner parameters
     mark_speed = 500000 #50000  # Speed for marking in bits per second (max spped = 4294960000)
-    freq = 10000//7 # Frequency for laser in Hz
+    freq = 10000//14 # Frequency for laser in Hz
     jump_speed = 4294960000 // 10  # Jump speed in bits per second
     port_name="/dev/ttyACM0"
 
@@ -63,10 +63,11 @@ if __name__ == "__main__":
                 #sf.go_to_aruco(cardNum, corners, unit, pattern_name)
 
                 #Live tracking laser aruco marker
-                track_id = 31 #34
+                track_id = 32  #31 #34
                 #sf.live_tracking_px(cardNum,picam2,track_id)
-                sf.live_tracking_px_predict(cardNum, picam2, track_id)
+                #sf.live_tracking_px_predict(cardNum, picam2, track_id)
 
+                sf.live_tracking_px_v2(cardNum, picam2, track_id)
 
                 print("Laser moved to detected marker positions.")
                 #cv2.imshow("Laser shooting", frame)

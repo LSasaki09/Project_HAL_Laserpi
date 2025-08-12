@@ -17,7 +17,8 @@ def test_connection():
     ret = libe1701py.load_correction(cardNum, "", 0)  # set correction file, for no/neutral correction use "" or NULL here
     print(f"Correction data: {ret}")
 
-    time.sleep(0.1)
+    time.sleep(0.5)
+    
 
     info = libe1701py.get_card_info(cardNum)
     print(f"Info: {info}")
@@ -56,12 +57,12 @@ def wait_marking(cardNum):
     """Wait until the marking is done."""
     state = libe1701py.get_card_state(cardNum)
     while (state & (libe1701py.E170X_CSTATE_MARKING | libe1701py.E170X_CSTATE_PROCESSING)) == 0:
-        time.sleep(0.01)
+        time.sleep(0.000001)
         state = libe1701py.get_card_state(cardNum)
 
     # Wait for marking to complete
     while (state & (libe1701py.E170X_CSTATE_MARKING | libe1701py.E170X_CSTATE_PROCESSING)) != 0:
-        time.sleep(0.01)
+        time.sleep(0.000001)
         state = libe1701py.get_card_state(cardNum)
 
 
@@ -108,6 +109,29 @@ def draw_grid_pts(cardNum, grid_size=3 , bit_range = 67108860//2):
 
 
 
+def punching(cardNum, coord, lasering_time = 0.005, blinking = 0):
+    """
+    This function makes the laser jump and shoot a target.
+    
+    cardNum : card number given at initialisation
+    coord : corrdinates in bits where you want to shoot at
+    lasering_time : how much time you want the laser to remain ON (should not be a high number)
+    blinking : for testing purposes only, makes the laser explicitly blink
+    """
+    libe1701py.jump_abs(cardNum, coord[0], coord[1], 0)
+    libe1701py.execute(cardNum)
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+    time.sleep(lasering_time) #time you want the laser to be on
+    if blinking != 0:
+        libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+        libe1701py.execute(cardNum)
+        time.sleep(0.01)
 
 
-
+def Woobling_time(cardNum, Coord_data, marking_speed = 100000):
+    Max_wobble_amplitude = 10000000
+    Max_frequency = 25000
+    libe1701py.set_speeds(cardNum,marking_speed, marking_speed) 
+    libe1701py.set_wobble(cardNum, Max_wobble_amplitude//20, Max_wobble_amplitude//20, Max_frequency//250)
+    libe1701py.mark_abs(cardNum, Coord_data[0], Coord_data[1], 0)
+    libe1701py.execute(cardNum)

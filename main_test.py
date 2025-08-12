@@ -38,12 +38,15 @@ if __name__ == "__main__":
     marker_length_mm = 24.0  # mm (2.4 cm)
     reference_id = 23  # ID of the reference marker to detect
 
+    
+    #lc.test_connection()
+
     # Path to CSV file
     csv_path = "scanner_camera_map.csv"
 
     '''camera test'''
     # ArUco detection test
-    #pf.aruco_detection(picam2, mtx, dist)
+    pf.aruco_detection(picam2, mtx, dist)
 
     #pf.live_cam(picam2)
 
@@ -52,20 +55,44 @@ if __name__ == "__main__":
     #square_size = 67108860 
     #lc.test_connection()
     #lc.draw_square(cardNum, square_size, 0, 0) #draw a squrae in bit coordinates
-    
 
-    timestamps = tf.measure_communication_delay(cardNum, picam2)
+    """
+    libe1701py.mark_abs(cardNum, 0, 0, 0)  # Mark the current position
+    libe1701py.laserControl
+    libe1701py.execute(cardNum)
+    time.sleep(1)
+    libe1701py.mark_abs(cardNum, 0, 0, 0) 
+    """
+
+    # test punching
+    """
+    grid_size=15
+
+    bit_range = 67108860//100
+
+    bit_positions = np.linspace(-bit_range, bit_range, grid_size, dtype=int)
+    grid_points = [(x, y) for x in bit_positions for y in bit_positions]
+
+    for idx, (bx, by) in enumerate(grid_points):
+        print(f"[{idx+1}/{len(grid_points)}] Point: ({bx}, {by})")
+        lp.punching(cardNum, [bx, by])
+
+        print(f"Point ({bx}, {by}) processed.")
+
+    libe1701py.close(cardNum)
+    """
+
+    
+    #timestamps = tf.measure_communication_delay(cardNum, picam2)
+    #timestamps = tf.measure_camera_delay(cardNum, picam2)
     
     # Print the timestamps
-    print("Timestamps for communication delay measurement:")
-    for i, ts in enumerate(timestamps):
-        print(f"Measurement {i}: {ts:.6f} ")
+    #print("Timestamps for communication delay measurement:")
+    #for i, ts in enumerate(timestamps):
+     #   print(f"Measurement {i}: {ts:.6f} ")
     
 
-
-    sf.close_all_devices(cardNum, picam2)
-
-
+    #sf.close_all_devices(cardNum, picam2)
 
 
     '''Scanner tests (camera + laser)'''

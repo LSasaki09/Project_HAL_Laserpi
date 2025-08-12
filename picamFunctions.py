@@ -120,7 +120,7 @@ def get_spot_coordinates_pixels(frame):
     if p is not None:
         px = p[0]
         py = p[1]
-        print(f"Spot pixel: ({px}, {py})")
+        #print(f"Spot pixel: ({px}, {py})")
         return px, py, max_val
     else:
         print("No laser spot detected.")
