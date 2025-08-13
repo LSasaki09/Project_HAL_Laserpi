@@ -11,22 +11,7 @@ import numpy as np
 import time
 import timeit
 import libe1701py
-import matplotlib.pyplot as plt
-
-def target_order(list_of_targets):
-    ordered_list = list_of_targets
-    np.sort(ordered_list[0:1], axis = -1)
-    return ordered_list
-
-
-
-#picam2, mtx, dist = pf.init_camera()
-#time.sleep(0.5)
-#cardNum = lc.init_laser()  
-
-#libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")#Turn on/off laser
-#libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
-#libe1701py.execute(cardNum)
+import matplotlib.pyplot as plt 
 
 def analyze_delays(delays, label):
     """Calculate and print statistical metrics for delay measurements."""
@@ -161,7 +146,7 @@ def measure_laser_delay(cardNum,num_measurements=100):
             ret = libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, '0')
             libe1701py.execute(cardNum)
             while ret != 0:
-                time.sleep(0.00000001)
+                time.sleep(0.0000001)
             current_time = time.perf_counter()
             delay = current_time - prev_time
             delays_off.append(delay)
@@ -339,9 +324,80 @@ def convert_px_to_bits_speed(speed_px, slope, intercept):
     speed_bits = (speed_px - intercept) / slope
     return speed_bits
 
+def laser_accuracy(cardNum, picam2, m, d):
+    """
+    Determines Laser accuracy by comparing aruco center to laser spot position
+    """
+    coord_xy, bit_xy, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale = sf.load_data("pixels")
+
+    libe1701py.jump_abs(cardNum, 0, 0, 0)
+    old_pos = [0, 0]
+    current_pos = [0, 0]
+    frame = picam2.capture_array()
+    centers, _, _, _ = pf.detect_aruco_markers(frame, mtx = m, dist = d)
+    print(centers)
+    
+    pf.modify_exposure_and_gain(picam2, exposure = 30000, gain = 1.0)
+
+    errors = []
+    for center in centers:
+        x_bit, y_bit = sf.project_to_bits(center[0], center[1], coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+        libe1701py.jump_abs(cardNum, x_bit, y_bit, 0)
+        libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+        libe1701py.execute(cardNum)
+        time.sleep(0.5)
+        frame = picam2.capture_array()
+        #laser_pos, _ = pf.detect_laser_spot(frame)
+        laser_pos, spot_detected = pf.detect_laser_spot2(frame, test = False)
+        time.sleep(0.1)
+        diff = np.asarray(center) - np.asarray(laser_pos)
+        error = np.linalg.norm(diff)
+        errors = np.append(errors, error)
+        print(f"Error = {error} pixels | Laser spot = {laser_pos}")
+    mean_error = np.mean(errors)
+    std_error = np.std(errors)
+    print(f"Mean Error = {mean_error} pixels | Standard deviation = {std_error}")
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+    libe1701py.execute(cardNum)
+    """
+    small = cv2.resize(frame, (640, 480))
+    cv2.imshow("Screen", small)
+
+    # Wait until spacebar (ASCII 32) is pressed
+    
+    while True:
+        if cv2.waitKey(1) & 0xFF == 32:  # spacebar
+                libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+                libe1701py.execute(cardNum)
+                break
+    
+    cv2.destroyAllWindows()
+    """
+
+def Study_beam_profile(picam2, cardNum, exp = 30000, g = 1.0, n = 300):
+    pf.modify_exposure_and_gain(picam2, exposure = exp, gain = g)
+    libe1701py.jump_abs(cardNum, 0, 0, 0)
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+    libe1701py.execute(cardNum)
+
+    frame = picam2.capture_array()
+    laser_spot, detect = pf.detect_laser_spot2(frame)
+    if detect == True:
+        cropped_frame = frame[laser_spot[1]-n:laser_spot[1]+n, laser_spot[0]-n:laser_spot[0]+n]
+        cv2.imshow("Focuse on beam spot", cropped_frame)
+        while True:
+            if cv2.waitKey(1) & 0xFF == 32:  # spacebar
+                break
+        cv2.destroyAllWindows()
+    else :
+        print("No spot detected")
+    
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+    libe1701py.execute(cardNum)
+
 
 if __name__ == "__main__":
-    picam2, mtx_0, dist_0 = pf.init_camera()
+    picam2, mtx_0, dist_0 = pf.init_camera(resolution = [4056, 3040])
     time.sleep(0.5)
     cardNum = lc.init_laser()
 
@@ -366,12 +422,43 @@ if __name__ == "__main__":
     #calibrate_laser_speed(cardNum, picam2)
     #slope,intercept = load_speeds_calib("speed_calibration.csv")
 
+    """
     #It's Wobbling time !!
     Marking_coord = [67108860//5, 0]
     Mark_speed = 10000
     libe1701py.jump_abs(cardNum, 0, 0, 0)
     libe1701py.execute(cardNum)
     lc.Woobling_time(cardNum, Marking_coord, marking_speed = Mark_speed)
+    """
+    """
+    # Test for detect_laser_spot2()
+    libe1701py.jump_abs(cardNum, 0, 0, 0)
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+    libe1701py.execute(cardNum)
+    for i in range(10):
+        frame = picam2.capture_array()
+        spot = pf.detect_laser_spot2(frame)
+        print(spot)
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+    libe1701py.execute(cardNum)
+    """
 
+    # Test to estimate the laser's pointpoint accuracy
+    """_
+    laser_accuracy(cardNum, picam2, m = mtx_0, d = dist_0)
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+    libe1701py.execute(cardNum)
+    _"""
 
-    #sf.close_all_devices(cardNum, picam2)
+    # Study beam profile
+    Study_beam_profile(picam2, cardNum, exp = 10000, g = 0.1, n = 200)
+
+    # Test to understand what happens to detect_laser_spot2 if there are no laser
+    """
+    for i in range(10):
+        frame = picam2.capture_array()
+        time.sleep(0.5)
+        loc, spot_detected = pf.detect_laser_spot2(frame)
+        print(loc), print(spot_detected)
+    """
+    sf.close_all_devices(cardNum, picam2)

@@ -118,14 +118,16 @@ def punching(cardNum, coord, lasering_time = 0.005, blinking = 0):
     lasering_time : how much time you want the laser to remain ON (should not be a high number)
     blinking : for testing purposes only, makes the laser explicitly blink
     """
-    libe1701py.jump_abs(cardNum, coord[0], coord[1], 0)
+    ret = libe1701py.jump_abs(cardNum, coord[0], coord[1], 0)
     libe1701py.execute(cardNum)
+    time.sleep(0.004)  # Wait for jump to complete
     libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
     time.sleep(lasering_time) #time you want the laser to be on
     if blinking != 0:
-        libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+        ret = libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
         libe1701py.execute(cardNum)
-        time.sleep(0.01)
+        #time.sleep(0.01)
+
 
 
 def Woobling_time(cardNum, Coord_data, marking_speed = 100000):

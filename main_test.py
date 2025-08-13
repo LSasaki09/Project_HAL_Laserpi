@@ -6,24 +6,26 @@ import cv2
 import numpy as np
 import time
 
-import Tampon_file as tf
+#import Tampon_file as tf
 
 def on_off_laser (cardNum):
     libe1701py.jump_abs(cardNum, 0, 0, 0)
     libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")  # Turn on laser
+    #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "1") 
     libe1701py.execute(cardNum)
     print("Laser turned on.")
-    time.sleep(3)
+    time.sleep(2)
     print("Laser turned off.")
     libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, '0')  # Turn off laser
     #libe1701py.jump_abs(cardNum, 0, 0, 0)
     libe1701py.execute(cardNum)
-    time.sleep(3)
+    time.sleep(2)
     #libe1701py.jump_abs(cardNum, 0, 0, 0)
-    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")  # Turn on laser
+    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+    #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "1")  # Turn on laser
     libe1701py.execute(cardNum)
     print("Laser turned on.")
-    time.sleep(3)
+    time.sleep(2)
 
 
 
@@ -34,7 +36,7 @@ if __name__ == "__main__":
     time.sleep(1)
 
     # Initialize the laser
-    cardNum = lc.init_laser(port_name="/dev/ttyACM0", freq=10000, jump_speed=4294960000//10, mark_speed=50000)
+    cardNum = lc.init_laser(port_name="/dev/ttyACM0", freq=20000, jump_speed=4294960000//4, mark_speed=1000000) # mark_speed=500000
     marker_length_mm = 24.0  # mm (2.4 cm)
     reference_id = 23  # ID of the reference marker to detect
 
@@ -46,7 +48,7 @@ if __name__ == "__main__":
 
     '''camera test'''
     # ArUco detection test
-    pf.aruco_detection(picam2, mtx, dist)
+    #pf.aruco_detection(picam2, mtx, dist)
 
     #pf.live_cam(picam2)
 
@@ -55,6 +57,11 @@ if __name__ == "__main__":
     #square_size = 67108860 
     #lc.test_connection()
     #lc.draw_square(cardNum, square_size, 0, 0) #draw a squrae in bit coordinates
+
+
+    #on_off_laser(cardNum)
+    sf.shoot_target_by_priority_px(cardNum,picam2)
+    libe1701py.close(cardNum)
 
     """
     libe1701py.mark_abs(cardNum, 0, 0, 0)  # Mark the current position

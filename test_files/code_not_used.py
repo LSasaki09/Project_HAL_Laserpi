@@ -72,3 +72,33 @@ def go_to_several_points_with_cam(cardNum, points_mm, mtx, dist, picam2, marker_
         libe1701py.close(cardNum)
     else:
         print("Projection failed. Check the data and input.")
+
+
+#####################################################################################################################33
+
+''' SCANNER FUNCTIONS NOT USED IN THE MAIN SCRIPT '''
+
+def non_linear_func(x, *data):
+    """
+    x: coordinates to update
+    - aruco_speed: speed of the aruco (supposed constant) in units of pixels/sec
+    - marking_speed: speed of the marking in units of pixels/sec
+    """
+    start_pts, end_pts, aruco_speed, mark_speed = data
+    t = np.linalg.norm(x-start_pts)/np.linalg.norm(mark_speed)
+    eq1 = end_pts[0] + aruco_speed[0]*t
+    eq2 = end_pts[1] + aruco_speed[1]*t
+    return [eq1, eq2]
+
+
+def create_moving_goal_pts(goal_pts, aruco_speed, marking_speed):
+    """
+    goal_pts: points of the pattern to draw in units of pixels
+    - aruco_speed: speed of the aruco (supposed constant) in units of pixels/sec
+    - marking_speed: speed of the marking in units of pixels/sec
+    """
+    for i in range(np.size(goal_pts, axis = 1))-1:
+        sol = fsolve(non_linear_func, goal_pts[i+1], args = [goal_pts[i], goal_pts[i+1], aruco_speed, mark_speed])
+        goal_pts[i+1] = sol
+    return goal_pts
+
