@@ -25,8 +25,8 @@ def close_all_devices(cardNum, picam2):
 def collect_pts_calib_scanner(unit="mm"):
     # ==== Parameters ====
     output_csv = "scanner_camera_map.csv"
-    grid_size = 15  # nxn grid
-    bit_range = 67108860//3 # full scanner field (±bit_rang)
+    grid_size = 16  # nxn grid
+    bit_range = 67108860//2 # full scanner field (±bit_rang)
     MAX_SPEED = 4294960000
 
     z = 0  # we assume 2D laser control 
@@ -56,7 +56,7 @@ def collect_pts_calib_scanner(unit="mm"):
     print(" Laser initialized.")
 
     # ==== Initialize camera ====
-    picam2, mtx, dist = pf.init_camera()
+    picam2, mtx, dist = pf.init_camera(gain = 1.0) #gain = 0.0 for default config
     print(" Camera initialized.")
     time.sleep(2)  # Allow camera to stabilize
 
@@ -72,7 +72,8 @@ def collect_pts_calib_scanner(unit="mm"):
             writer.writerow(["bit_x", "bit_y", "x_mm", "y_mm", "intensity_pixel"])
 
         elif unit == "pixels":
-            writer.writerow(["bit_x", "bit_y", "x_px", "y_px", "intensity_pixel"])
+            #writer.writerow(["bit_x", "bit_y", "x_px", "y_px", "intensity_pixel"])
+            writer.writerow(["bit_x", "bit_y", "x_px", "y_px", "spot_detected"])
         else:
             print("ERROR: Invalid unit. Use 'mm' or 'pixels'.")
             return
@@ -113,14 +114,18 @@ def collect_pts_calib_scanner(unit="mm"):
                 print(f"   ➤ Spot in world frame: ({x_mm}, {y_mm}) mm → Bit: ({px}, {py})")
 
             elif unit == "pixels":
-                px,py,intensity_pixel = pf.get_spot_coordinates_pixels(frame)
-                writer.writerow([bx, by, px, py, intensity_pixel]) 
+                #px,py,intensity_pixel = pf.get_spot_coordinates_pixels(frame)
+                #writer.writerow([bx, by, px, py, intensity_pixel]) 
+                spot_pt,spot_detected = pf.detect_laser_spot2(frame)
+                px = spot_pt [0]
+                py = spot_pt [1]
+                writer.writerow([bx, by, px, py, spot_detected])
                 print(f"   ➤ Spot in pixel frame: ({px}, {py}) pixels → Bit: ({bx}, {by})")
             else:
                 print("ERROR: Invalid unit. Use 'mm' or 'pixels'.")
                 return
 
-            cv2.circle(frame, (px, py),12, (0, 0, 255), 2)
+            cv2.circle(frame, (px, py),10, (0, 0, 255), 2)
             #aruco.drawDetectedMarkers(frame, corners, ids)
             small = cv2.resize(frame, (640, 480))  
             cv2.imshow("Preview Calibration", small)
@@ -159,11 +164,12 @@ def load_data(unit = "mm",csv_path="scanner_camera_map.csv", SPOT_INTENSITY_TRES
     # Load CSV data
     df = pd.read_csv(csv_path)
     
-    spot_intensity = df['intensity_pixel'].values
+    #spot_intensity = df['intensity_pixel'].values
+    spot_detected = df['spot_detected'].values
     
     # Create a mask to identify rows where intensity is above the threshold
-    mask = spot_intensity > SPOT_INTENSITY_TRESHOLD
-    
+    #mask = spot_intensity > SPOT_INTENSITY_TRESHOLD
+    mask = spot_detected == True
     # Filter the DataFrame to remove outliers
     df_clean = df[mask]
     
@@ -350,7 +356,7 @@ def draw_pattern(cardNum, square_size,pattern_name,x0, y0, xy_norm=None, bit_xy_
 
     elif pattern_name == "spiral":
         n_turns = 6  # turn nb spiral
-        points_per_turn = 36  # Points per turn 
+        points_per_turn = 20  # Points per turn 
         total_points = n_turns * points_per_turn
         goal_pts = []
         for i in range(total_points):
@@ -457,8 +463,8 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
         goal_pts = corners.tolist() + [corners[0].tolist()]  # Close the loop
 
     elif pattern_name == "spiral":
-        n_turns = 5  # Number of spiral turns
-        points_per_turn = 18  # Points per turn (pts every 20 degrees)
+        n_turns = 4  # Number of spiral turns
+        points_per_turn = 10  # Points per turn
         total_points = n_turns * points_per_turn
         goal_pts_unit = []
         for i in range(total_points):
@@ -507,7 +513,7 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
             corners[3].tolist(),  # Bottom-right
             corners[1].tolist()   # Back to top-left
         ]
-        for _ in range(20):
+        for _ in range(10):
             goal_pts.extend(base_pattern)
     
 
@@ -564,31 +570,26 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
     #lc.wait_marking(cardNum)
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
 
-def non_linear_func(x, *data):
-    """
-    x: coordinates to update
-    - aruco_speed: speed of the aruco (supposed constant) in units of pixels/sec
-    - marking_speed: speed of the marking in units of pixels/sec
-    """
-    start_pts, end_pts, aruco_speed, mark_speed = data
-    t = np.linalg.norm(x-start_pts)/np.linalg.norm(mark_speed)
-    eq1 = end_pts[0] + aruco_speed[0]*t
-    eq2 = end_pts[1] + aruco_speed[1]*t
-    return [eq1, eq2]
+def draw_in_aruco_during_time(cardNum, center_x,center_y,pattern_name, corners,shoot_time = 0.0025,  xy_norm=None, bit_xy_norm=None, min_coord=None, max_coord=None, bit_scale=None, aruco_speed=0, marking_speed = 0):
+    start_time = time.perf_counter()
+    x_bit, y_bit = project_to_bits(center_x, center_y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
+    libe1701py.jump_abs(cardNum,x_bit , y_bit, 0)  # Jump to initial position
+    libe1701py.execute(cardNum)
+    time.sleep(0.004)  # Allow time for the jump to complete
+    while True:
+        elapsed_time = time.perf_counter() - start_time
+        if elapsed_time > shoot_time:
+            break
+        
+        # Draw the pattern within the ArUco marker
+        draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale, aruco_speed, marking_speed)
+        libe1701py.execute(cardNum)
+        lc.wait_marking(cardNum)
+    
 
 
-def create_moving_goal_pts(goal_pts, aruco_speed, marking_speed):
-    """
-    goal_pts: points of the pattern to draw in units of pixels
-    - aruco_speed: speed of the aruco (supposed constant) in units of pixels/sec
-    - marking_speed: speed of the marking in units of pixels/sec
-    """
-    for i in range(np.size(goal_pts, axis = 1))-1:
-        sol = fsolve(non_linear_func, goal_pts[i+1], args = [goal_pts[i], goal_pts[i+1], aruco_speed, mark_speed])
-        goal_pts[i+1] = sol
-    return goal_pts
 
-def go_to_several_points_without_cam(cardNum, points,unit = "mm",pattern_name = "square", csv_path="scanner_camera_map.csv"):
+def go_to_several_points_without_cam(cardNum, points,shooting_time = 0.005, unit = "pixels", csv_path="scanner_camera_map.csv"):
     """
     Point the laser to a list of points in the world frame  using interpolation.
     
@@ -620,22 +621,96 @@ def go_to_several_points_without_cam(cardNum, points,unit = "mm",pattern_name = 
         libe1701py.jump_abs(cardNum, x_bit, y_bit, 0)
         #libe1701py.mark_abs(cardNum, x_bit, y_bit, 0)
         libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
-        
-        #draw_square_world_frame (cardNum, 18, x_coord, y_coord, xy_norm, bit_xy_norm, pt_min, pt_max, bit_scale)
-        square_size = 100
+
 
         #draw_pattern(cardNum,square_size, pattern_name,x_coord, y_coord, xy_norm, bit_xy_norm, pt_min, t_max, bit_scale)
         
         libe1701py.execute(cardNum)
         lc.wait_marking(cardNum)
        
-        time.sleep(0.1)
+        #time.sleep(0.1)
 
-    libe1701py.execute(cardNum)
-    time.sleep(0.05)
-    lc.wait_marking(cardNum)
-    time.sleep(0.05)
     libe1701py.close(cardNum)
+
+
+def shoot_target_by_priority_px(cardNum, picam2, csv_path="scanner_camera_map.csv"):
+    # Load calibration mapping for pixel → scanner coordinates
+    coord_xy, bit_xy, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale = load_data("pixels", csv_path)
+
+    # Capture frame and detect markers
+    frame = picam2.capture_array()
+    centers, ids, corners_list, frame = pf.detect_aruco_markers(frame, "pixels", 0, 0)
+
+    if ids is None or len(ids) == 0:
+        print("No ArUco markers detected.")
+        return
+
+    # Store markers with their sizes and positions
+    aruco_info = []
+    for idx, corner in enumerate(corners_list):
+        if corner is not None:
+            corner = corner.reshape(4, 2)
+            # Compute all four side lengths
+            side_lengths = [
+                np.linalg.norm(corner[1] - corner[0]),
+                np.linalg.norm(corner[2] - corner[1]),
+                np.linalg.norm(corner[3] - corner[2]),
+                np.linalg.norm(corner[0] - corner[3])
+            ]
+            avg_size = np.mean(side_lengths)  # Average side length in pixels
+            center_x = np.mean(corner[:, 0])
+            center_y = np.mean(corner[:, 1])
+            aruco_info.append({
+                "id": ids[idx][0],
+                "size": avg_size,
+                "center": (center_x, center_y),
+                "corners": corner
+            })
+
+    # Sort by size (largest first)
+    #aruco_info.sort(key=lambda x: x["size"], reverse=True)
+    aruco_info.sort(key=lambda x: x["center"][0], reverse=False)
+
+    # Define thresholds for categories (you can tune these)
+    BIG_THRESHOLD = 80 #170
+    MID_THRESHOLD = 60 #120
+    coeff_time = 0.3 # 0.01 for ms units
+
+    for aruco in aruco_info:
+        size = aruco["size"]
+        center_x, center_y = aruco["center"]
+
+        # Categorize by size
+        if size >= BIG_THRESHOLD:
+            category = "big"
+            shoot_time = 2.5 * coeff_time   # 25 ms
+        elif size >= MID_THRESHOLD:
+            category = "mid"
+            shoot_time = 1.2 * coeff_time
+        else:
+            category = "little"
+            shoot_time = 0.6 * coeff_time
+
+        print(f"Aruco ID {aruco['id']} → size: {size:.2f}px → {category} target")
+
+
+        # Project pixel coordinates to scanner coordinates
+        x_bit, y_bit = project_to_bits(center_x, center_y, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+        if x_bit is None or y_bit is None:
+            print("Projection failed, skipping target.")
+            continue
+
+        #go_to_several_points_without_cam(cardNum, points,shooting_time = 0.005, unit = "pixels", csv_path="scanner_camera_map.csv")
+        
+        corners = aruco["corners"]
+        
+        # Move laser to target and fire
+        #lc.punching(cardNum, [x_bit,y_bit], shoot_time, True)
+        draw_in_aruco_during_time(cardNum, center_x,center_y,"sandglass", corners,shoot_time,  coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+
+        #libe1701py.execute(cardNum)
+        #lc.wait_marking(cardNum)
+
 
 
 def go_to_aruco(cardNum, corners_list, unit="mm", pattern_name="square", csv_path="scanner_camera_map.csv"):
