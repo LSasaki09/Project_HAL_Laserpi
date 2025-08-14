@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
                 #sf.go_to_several_points_without_cam(cardNum,centers,unit,pattern_name,"scanner_camera_map.csv")
                 
-                sf.go_to_aruco(cardNum, corners, unit, pattern_name)
+                #sf.go_to_aruco(cardNum, corners, unit, pattern_name)
 
                 #Live tracking laser aruco marker
                 track_id = 32  #31 #34
@@ -68,6 +68,8 @@ if __name__ == "__main__":
                 #sf.live_tracking_px_predict(cardNum, picam2, track_id)
 
                 #sf.live_tracking_px_v2(cardNum, picam2, track_id)
+                sf.shoot_target_by_priority_px(cardNum,picam2)
+                #libe1701py.close(cardNum)
 
                 print("Laser moved to detected marker positions.")
                 #cv2.imshow("Laser shooting", frame)

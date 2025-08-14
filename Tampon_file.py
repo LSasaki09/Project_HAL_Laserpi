@@ -451,7 +451,7 @@ if __name__ == "__main__":
     _"""
 
     # Study beam profile
-    Study_beam_profile(picam2, cardNum, exp = 10000, g = 0.1, n = 200)
+    Study_beam_profile(picam2, cardNum, exp = 8000, g = 1.0, n = 200)
 
     # Test to understand what happens to detect_laser_spot2 if there are no laser
     """

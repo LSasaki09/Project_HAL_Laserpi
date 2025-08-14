@@ -571,11 +571,11 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
 
 def draw_in_aruco_during_time(cardNum, center_x,center_y,pattern_name, corners,shoot_time = 0.0025,  xy_norm=None, bit_xy_norm=None, min_coord=None, max_coord=None, bit_scale=None, aruco_speed=0, marking_speed = 0):
-    start_time = time.perf_counter()
     x_bit, y_bit = project_to_bits(center_x, center_y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
     libe1701py.jump_abs(cardNum,x_bit , y_bit, 0)  # Jump to initial position
     libe1701py.execute(cardNum)
-    time.sleep(0.004)  # Allow time for the jump to complete
+    time.sleep(0.0025)  # Allow time for the jump to complete
+    start_time = time.perf_counter()
     while True:
         elapsed_time = time.perf_counter() - start_time
         if elapsed_time > shoot_time:
@@ -585,9 +585,8 @@ def draw_in_aruco_during_time(cardNum, center_x,center_y,pattern_name, corners,s
         draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale, aruco_speed, marking_speed)
         libe1701py.execute(cardNum)
         lc.wait_marking(cardNum)
+
     
-
-
 
 def go_to_several_points_without_cam(cardNum, points,shooting_time = 0.005, unit = "pixels", csv_path="scanner_camera_map.csv"):
     """
@@ -674,7 +673,7 @@ def shoot_target_by_priority_px(cardNum, picam2, csv_path="scanner_camera_map.cs
     # Define thresholds for categories (you can tune these)
     BIG_THRESHOLD = 80 #170
     MID_THRESHOLD = 60 #120
-    coeff_time = 0.3 # 0.01 for ms units
+    coeff_time = 0.01 # 0.01 for ms units 0.3
 
     for aruco in aruco_info:
         size = aruco["size"]

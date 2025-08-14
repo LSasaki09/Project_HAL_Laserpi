@@ -36,7 +36,7 @@ if __name__ == "__main__":
     time.sleep(1)
 
     # Initialize the laser
-    cardNum = lc.init_laser(port_name="/dev/ttyACM0", freq=20000, jump_speed=4294960000//4, mark_speed=1000000) # mark_speed=500000
+    cardNum = lc.init_laser(port_name="/dev/ttyACM0", freq=20000, jump_speed=4294960000//4, mark_speed=4000000) # mark_speed=500000
     marker_length_mm = 24.0  # mm (2.4 cm)
     reference_id = 23  # ID of the reference marker to detect
 
@@ -45,6 +45,7 @@ if __name__ == "__main__":
 
     # Path to CSV file
     csv_path = "scanner_camera_map.csv"
+
 
     '''camera test'''
     # ArUco detection test
