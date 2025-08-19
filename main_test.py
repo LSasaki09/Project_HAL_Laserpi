@@ -1,6 +1,6 @@
 import laserControl as lc
 import picamFunctions as pf
-import scannerFunctions as sf
+import shootingFunctions as sf
 import libe1701py
 import cv2
 import numpy as np
@@ -39,7 +39,6 @@ if __name__ == "__main__":
     cardNum = lc.init_laser(port_name="/dev/ttyACM0", freq=20000, jump_speed=4294960000//4, mark_speed=4000000) # mark_speed=500000
     marker_length_mm = 24.0  # mm (2.4 cm)
     reference_id = 23  # ID of the reference marker to detect
-
     
     #lc.test_connection()
 
@@ -49,8 +48,8 @@ if __name__ == "__main__":
 
     '''camera test'''
     # ArUco detection test
-    #pf.aruco_detection(picam2, mtx, dist)
-
+    pf.aruco_detection(picam2, mtx, dist)
+    
     #pf.live_cam(picam2)
 
 
@@ -61,8 +60,8 @@ if __name__ == "__main__":
 
 
     #on_off_laser(cardNum)
-    sf.shoot_target_by_priority_px(cardNum,picam2)
-    libe1701py.close(cardNum)
+    #sf.shoot_target_by_priority_px(cardNum,picam2)
+    #libe1701py.close(cardNum)
 
     """
     libe1701py.mark_abs(cardNum, 0, 0, 0)  # Mark the current position

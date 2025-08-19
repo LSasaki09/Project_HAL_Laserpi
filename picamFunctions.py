@@ -133,54 +133,6 @@ def detect_aruco_markers(frame,unit = "pixels",  mtx=0, dist=0, marker_length=24
     return centers, ids, corners, frame
 
 
-def get_marker_homography(corners, marker_length_mm):
-    """Returns homography from image to marker real-world (mm) coordinates."""
-    # corners[0] shape: (4, 2), 4 corners of marker in image
-    img_pts = corners[0].astype(np.float32)
-
-    obj_pts = np.array([
-        [0, marker_length_mm],     # Coin inférieur gauche (nouveau (0,0))
-        [marker_length_mm, marker_length_mm],  # Coin inférieur droit
-        [marker_length_mm, 0],     # Coin supérieur droit
-        [0, 0]                     # Coin supérieur gauche
-    ], dtype=np.float32)
-
-    H, _ = cv2.findHomography(img_pts, obj_pts)
-    return H
-
-def pixel_to_mm(pt, H):
-    """Convert a pixel (x, y) to world (X, Y) in mm using homography."""
-    px = np.array([ [pt[0], pt[1], 1] ], dtype=np.float32).T
-    world = H @ px
-    world /= world[2]
-    return float(world[0]), float(world[1])
-
-def get_spot_coordinates(frame, corners, marker_length_mm, ids, reference_id=23):
-    """Returns the real-world coordinates of the laser spot based on a specific marker id."""
-    if ids is not None:
-        for i, marker_id in enumerate(ids.flatten()):
-            if marker_id == reference_id: #Remove this if we don't target only one target id
-                H = get_marker_homography(corners[i], marker_length_mm)
-                p,max_val = detect_laser_spot(frame)
-                px = p[0]
-                py = p[1]
-                if px is not None and py is not None:
-                    X_mm, Y_mm = pixel_to_mm((px, py), H)
-                    print(f"Spot pixel: ({px}, {py}) → Real-world: ({X_mm:.2f}, {Y_mm:.2f}) mm")
-                    
-                    #cv2.circle(frame, (px, py), 10, (0, 0, 255), 2)
-                    #aruco.drawDetectedMarkers(frame, corners, ids)
-                    return X_mm, Y_mm, px, py, max_val
-                else:
-                    print("No laser spot detected.")
-                    return 0., 0., 0, 0, 0
-        print(f"Marker ID {reference_id} not found.")
-    else:
-        print("No markers detected.")
-        return 0., 0., 0, 0, 0
-
-    # If no marker found or no laser spot detected
-    return 0., 0., 0, 0, 0
 
 def get_spot_coordinates_pixels(frame):
     """Returns the pixel coordinates of the laser spot in the frame."""
@@ -195,75 +147,11 @@ def get_spot_coordinates_pixels(frame):
         return 0, 0, 0
 
 
-
-def get_relative_marker_centers(frame, mtx, dist, reference_id, marker_length_mm=24.0):
-    """
-    Returns the positions of ArUco marker centers relative to the reference marker’s coordinate system.
-
-    Parameters:
-    - frame: Input image (RGB, e.g., from Picamera2).
-    - mtx: Camera matrix.
-    - dist: Distortion coefficients.
-    - reference_id: ID of the reference marker.
-    - marker_length_mm: Side length of the marker in millimeters (default: 24.0 mm).
-
-    Returns:
-    - relative_centers: List of tuples [(x_mm, y_mm), ...] of centers in the reference marker’s coordinate system.
-    - ids: Array of detected marker IDs.
-    - frame: Annotated image with detected markers.
-    """
-    # Detect ArUco markers
-    _, ids, corners, frame = detect_aruco_markers(frame, "mm", mtx, dist, marker_length_mm)
-    
-    relative_centers = []
-    
-    if ids is not None:
-        # Find the index of the reference marker
-        ref_index = None
-        for i, marker_id in enumerate(ids.flatten()):
-            if marker_id == reference_id:
-                ref_index = i
-                break
-        
-        if ref_index is not None:
-            # Compute the homography for the reference marker
-            H = get_marker_homography(corners[ref_index], marker_length_mm)
-            
-            # Iterate through all detected markers
-            for i in range(len(ids)):
-                marker_corners = corners[i][0]
-                center_px = np.mean(marker_corners, axis=0)  # [x, y] in pixels
-                
-                # Convert pixel coordinates to millimeters using the homography
-                x_mm, y_mm = pixel_to_mm(center_px, H)
-                relative_centers.append((x_mm, y_mm))
-                
-                print(f"Marker {ids[i][0]}: Center at ({x_mm:.2f}, {y_mm:.2f}) mm relative to marker {reference_id}")
-        else:
-            print(f"Reference marker with ID {reference_id} was not detected.")
-    else:
-        print("No markers detected.")
-    
-    return relative_centers, ids, frame
-
-
-
-def show_spot(mtx,dist, picam2,unit="mm", marker_length_mm=24.0, reference_id=23):
-    # Display the laser spot position on the camera feed depending on the reference ID (in mm)
-    frame = picam2.capture_array()
-    centers,ids,corners,frame = detect_aruco_markers(frame,unit, mtx, dist, marker_length_mm)
-    spotx_mm, spoty_mm, px, py, _ = get_spot_coordinates(frame, corners, marker_length_mm, ids, reference_id)
-    print(f"Laser spot at: ({spotx_mm:.2f}, {spoty_mm:.2f}) mm → Pixel: ({px}, {py})")
-    cv2.circle(frame, (int(px), int(py)), 10, (0, 0, 255), 2)
-    cv2.imshow('Spot detection', frame)
-    cv2.waitKey(50)  # Pause to observe
-
-
 def live_cam(picam):
     """Display live camera feed."""
 
     # Display the live camera feed
-    print("🟢 Press 'q' to quit")
+    print(" Press 'q' to quit")
     while True:
         frame = picam.capture_array()
         small = cv2.resize(frame, (640, 480)) 
@@ -279,7 +167,7 @@ def live_cam(picam):
 def aruco_detection(picam2, mtx, dist):
     """Detect ArUco markers using Picamera2."""
     # Define the ArUco dictionary (e.g., DICT_6X6_250)
-    aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
+    aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_1000)
     parameters = aruco.DetectorParameters_create()
 
     # Size of the marker in cm (adjust according to your markers)
@@ -322,5 +210,3 @@ def aruco_detection(picam2, mtx, dist):
     # Release resources
     picam2.stop()
     cv2.destroyAllWindows()
-
-
