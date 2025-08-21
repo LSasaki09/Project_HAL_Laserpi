@@ -1,9 +1,8 @@
 import csv
 import pandas as pd
-
 import laserControl as lc
 import picamFunctions as pf
-import scannerFunctions as sf
+import shootingFunctions as sf
 import cv2
 from cv2 import aruco
 from picamera2 import Picamera2
@@ -27,7 +26,6 @@ def analyze_delays(delays, label):
     print(f"  Min: {min_delay:.6f} seconds")
     print(f"  Max: {max_delay:.6f} seconds")
     print(f"  Median: {median_delay:.6f} seconds")
-
 
 def measure_communication_delay(cardNum, picam2,nb_data_points=100):
     time_stamps = np.zeros(nb_data_points)
@@ -112,7 +110,6 @@ def measure_camera_delay(cardNum, picam2, mtx_0, dist_0, num_measurements=100):
     analyze_delays(delays, "Camera")
     return delays
 
-
 def measure_laser_delay(cardNum,num_measurements=100):
     """Measure the delay between laser commands."""
     delays_on = []
@@ -164,10 +161,6 @@ def measure_laser_delay(cardNum,num_measurements=100):
 
     return delays_on, delays_off
 
-    
-
-
-
 def plot_speed_relationship(speeds_bits, speeds_px, slope, intercept):
     """
     Trace la relation entre vitesse_bits et vitesse_px avec la droite d'interpolation.
@@ -193,8 +186,6 @@ def plot_speed_relationship(speeds_bits, speeds_px, slope, intercept):
     plt.grid(True)
     plt.tight_layout()
     plt.show()
-
-
 
 def calibrate_laser_speed(cardNum, picam2, start_px=(600, 100), end_px=(600, 1200), speeds_bits=None, num_samples=100, csv_path="scanner_camera_map.csv", output_csv="speed_calibration.csv"):
     """
@@ -289,8 +280,7 @@ def calibrate_laser_speed(cardNum, picam2, start_px=(600, 100), end_px=(600, 120
             libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
             libe1701py.execute(cardNum)
             time.sleep(0.1)
-
-   
+ 
 def load_speeds_calib(csv_path="speed_calibration.csv"):
     """
     Charge les données de calibration de vitesse et calcule la relation linéaire.
@@ -395,11 +385,173 @@ def Study_beam_profile(picam2, cardNum, exp = 30000, g = 1.0, n = 300):
     libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
     libe1701py.execute(cardNum)
 
+def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_norm=None, min_coord=None, max_coord=None, bit_scale=None, aruco_speed=0, marking_speed = 0):
+    """
+    Draw a pattern within the boundaries defined by an ArUco marker's corners, respecting its orientation.
+
+    Parameters:
+    - cardNum: Laser card identifier.
+    - pattern_name: Name of the pattern to draw ('square', 'spiral', 'sandglass', 'zigzag').
+    - corners: Numpy array of shape (4, 2) containing the four corners of the ArUco marker.
+    - xy_norm: Normalized calibration coordinates (mm or pixels).
+    - bit_xy_norm: Normalized bit coordinates.
+    - min_coord, max_coord: Min/max coordinates for interpolation.
+    - bit_scale: Scaling factor for bit coordinates.
+    - aruco_speed: speed of the aruco (supposed constant) in units of pixels/sec
+    - marking_speed: speed of the marking in units of pixels/sec
+    """
+    # Ensure corners are in the correct shape
+    corners = corners.reshape(4, 2)
+
+    # Define a unit square for homography mapping (in normalized [0,1]x[0,1] space)
+    unit_square = np.array([
+        [0, 0],  # Bottom-left
+        [0, 1],  # Top-left
+        [1, 1],  # Top-right
+        [1, 0]   # Bottom-right
+    ], dtype=np.float32)
+
+    # Calculate homography from unit square to ArUco marker corners
+    h_matrix, _ = cv2.findHomography(unit_square, corners, cv2.RANSAC)
+
+    # Calculate center for initial laser jump
+    center_x = np.mean(corners[:, 0])
+    center_y = np.mean(corners[:, 1])
+
+    if pattern_name == "square":
+        # Use the exact corners of the ArUco marker
+        goal_pts = corners.tolist() + [corners[0].tolist()]  # Close the loop
+
+    elif pattern_name == "spiral":
+        n_turns = 4  # Number of spiral turns
+        points_per_turn = 10  # Points per turn
+        total_points = n_turns * points_per_turn
+        goal_pts_unit = []
+        for i in range(total_points):
+            angle = (i / points_per_turn) * 2 * np.pi
+            radius = (i / total_points) * 0.5  # Max radius is 0.5 to stay within unit square
+            x = 0.5 + radius * np.cos(angle)  # Center at (0.5, 0.5)
+            y = 0.5 + radius * np.sin(angle)
+            goal_pts_unit.append([x, y])
+        # Transform points to marker space
+        goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
+        goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
+
+    elif pattern_name == "several_spirals":
+        n_turns = 4  # Number of spiral turns
+        points_per_turn = 18  # Points per turn
+        total_points = n_turns * points_per_turn
+        goal_pts_unit = []
+        for j in range (10):
+            for i in range(total_points):
+                angle = (i / points_per_turn) * 2 * np.pi
+                radius = (i / total_points) * 0.5  # Max radius is 0.5 to stay within unit square
+                x = 0.5 + radius * np.cos(angle)  # Center at (0.5, 0.5)
+                y = 0.5 + radius * np.sin(angle)
+                goal_pts_unit.append([x, y])
+        # Transform points to marker space
+        goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
+        goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
+
+
+    elif pattern_name == "sandglass":
+        # Use the exact corners in sandglass order
+        goal_pts = [
+            corners[1].tolist(),  # Top-left
+            corners[2].tolist(),  # Top-right
+            corners[0].tolist(),  # Bottom-left
+            corners[3].tolist(),  # Bottom-right
+            corners[1].tolist()   # Back to top-left
+        ]
+
+    elif pattern_name == "several_sandglasses":
+        goal_pts = []
+        base_pattern = [
+            corners[1].tolist(),  # Top-left
+            corners[2].tolist(),  # Top-right
+            corners[0].tolist(),  # Bottom-left
+            corners[3].tolist(),  # Bottom-right
+            corners[1].tolist()   # Back to top-left
+        ]
+        for _ in range(10):
+            goal_pts.extend(base_pattern)
+    
+
+    elif pattern_name == "zigzag":
+        n_lines = 5  # Number of diagonal lines
+        goal_pts_unit = []
+        for i in range(n_lines):
+            t = i / (n_lines - 1) if n_lines > 1 else 0.5
+            if i % 2 == 0:
+                # Bottom-left to top-right diagonal
+                start_x, start_y = 0, t
+                end_x, end_y = 1, 1 - t
+            else:
+                # Bottom-right to top-left diagonal
+                start_x, start_y = 1, t
+                end_x, end_y = 0, 1 - t
+            goal_pts_unit.append([start_x, start_y])
+            goal_pts_unit.append([end_x, end_y])
+        goal_pts_unit.append([0, 0])  # Return to start for continuity
+        # Transform points to marker space
+        goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
+        goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
+    
+    elif pattern_name == "simple_zigzag":
+        x, y = corners[1].tolist()[0], corners[1].tolist()[1]
+        x1, y1 = sf.project_to_bits(x, y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
+        x, y = corners[2].tolist()[0], corners[2].tolist()[1]
+        x2, y2 = sf.project_to_bits(x, y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
+        if y1 is None or y2 is None:
+            Max_wobble_amplitude = 30000000
+        else:
+            Max_wobble_amplitude = np.absolute(y1 - y2)
+        libe1701py.set_wobble(cardNum, Max_wobble_amplitude, Max_wobble_amplitude, 250)
+        start_point, end_point = (unit_square[0] + unit_square[1])/2, (unit_square[2] + unit_square[3])/2
+        goal_pts_unit = [start_point, end_point]
+        goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
+        goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
+
+    else:
+        print(f"Unknown pattern: {pattern_name}. Supported patterns: square, spiral, sandglass, zigzag, simple_zigzag.")
+        return
+
+    # Convert center to bits
+    x_center, y_center = sf.project_to_bits(center_x, center_y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
+    if x_center is None or y_center is None:
+        print(f"Projection failed for the center ({center_x}, {center_y}).")
+        return
+
+    # If aruco has a constant speed, then modify goal_pts accordingly
+    if (marking_speed != 0) and (aruco_speed != 0):
+        goal_pts = create_moving_goal_pts(goal_pts, aruco_speed, marking_speed)
+    
+    # Convert pattern points to laser coordinates (bits)
+    goal_pts_bits = []
+    for x_g, y_g in goal_pts:
+        x_bit, y_bit = sf.project_to_bits(x_g, y_g, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
+        if x_bit is None or y_bit is None:
+            print(f"Projection failed for ({x_g}, {y_g}). Stopping drawing.")
+            return
+        goal_pts_bits.append((x_bit, y_bit))
+
+    #libe1701py.jump_abs(cardNum, x_center, y_center, 0)
+    #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+
+    # Draw the pattern
+    for x_bit, y_bit in goal_pts_bits:
+        libe1701py.mark_abs(cardNum, x_bit, y_bit, 0)
+
+    #libe1701py.execute(cardNum)
+    #lc.wait_marking(cardNum)
+    #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
+
 
 if __name__ == "__main__":
-    picam2, mtx_0, dist_0 = pf.init_camera(resolution = [4056, 3040])
+    picam2, m, d = pf.init_camera()
     time.sleep(0.5)
     cardNum = lc.init_laser()
+
 
     """
     - All these are different codes to estimate sources of delays and lag
@@ -451,7 +603,9 @@ if __name__ == "__main__":
     _"""
 
     # Study beam profile
+    """
     Study_beam_profile(picam2, cardNum, exp = 8000, g = 1.0, n = 200)
+    """
 
     # Test to understand what happens to detect_laser_spot2 if there are no laser
     """
@@ -461,4 +615,22 @@ if __name__ == "__main__":
         loc, spot_detected = pf.detect_laser_spot2(frame)
         print(loc), print(spot_detected)
     """
+
+    # Test for Draw pattern
+    MAX_SPEED_BITS_MARK = 4294960000 // 200000
+    libe1701py.set_speeds(cardNum, MAX_SPEED_BITS_MARK, MAX_SPEED_BITS_MARK)
+    frame = picam2.capture_array()
+    pts_xy, bit_xy, xy_n, bit_xy_n, pt_min, pt_max, bit_s = sf.load_data()
+    centers, ids, corners, frame = pf.detect_aruco_markers(frame, mtx = m, dist = d)
+    time.sleep(1)
+
+    track_id = 0
+    if track_id in ids:
+        index_track_id = np.where(ids == track_id)[0][0]
+        corners_track_id = corners[index_track_id].reshape(4, 2)
+        print(f"corners track id 0: {corners_track_id}")
+        draw_pattern_in_aruco(cardNum, "simple_zigzag", corners_track_id, xy_norm=xy_n, bit_xy_norm=bit_xy_n, min_coord=pt_min, max_coord=pt_max, bit_scale=bit_s)
+        libe1701py.execute(cardNum)
+        lc.wait_marking(cardNum)
+
     sf.close_all_devices(cardNum, picam2)

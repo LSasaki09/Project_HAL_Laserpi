@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     #Scanner parameters
     mark_speed = 1000000 #50000  # Speed for marking in bits per second (max spped = 4294960000)
-    freq = 10000//2 # Frequency for laser in Hz
+    freq = 10000//10 # Frequency for laser in Hz
     jump_speed = 4294960000 // 10 # Jump speed in bits per second
     port_name="/dev/ttyACM0"
 
@@ -90,7 +90,6 @@ if __name__ == "__main__":
                 #sf.go_to_aruco(cardNum, corners, unit, pattern_name)
 
                 #sf.shoot_target_by_priority_px(cardNum,picam2)
-
                 #Live tracking laser aruco marker
                 track_id = 31 # 32  #34
                 track_vel_id = 0 

@@ -101,7 +101,7 @@ def detect_laser_spot2(image, test = False):
     
     return [cx, cy], spot_detected
 
-def detect_aruco_markers(frame,unit = "pixels",  mtx=0, dist=0, marker_length=24.0):
+def detect_aruco_markers(frame, unit = "pixels",  mtx=0, dist=0, marker_length=24.0):
     """Detect ArUco markers in the frame and return their centers."""
     aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
     parameters = cv2.aruco.DetectorParameters_create()

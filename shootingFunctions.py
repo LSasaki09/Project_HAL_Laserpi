@@ -641,7 +641,6 @@ def live_tracking_px_v2(cardNum, picam2, track_id,track_vel_id=0, csv_path="scan
 
 
 
-
 def live_multitracking_px(cardNum, picam2, track_id, track_vel_id=0, csv_path="scanner_camera_map.csv"):
     """
     Track multiple unique ArUco markers (all IDs != reference ID 0 are targets) for ~1 second each,
@@ -741,7 +740,7 @@ def live_multitracking_px(cardNum, picam2, track_id, track_vel_id=0, csv_path="s
                         if marker_id in active_targets:
                             active_targets[marker_id]['center'] = center
                             active_targets[marker_id]['time'] = current_time
-                            print(f"Updated active target ID {marker_id} at ({center[0]:.2f}, {center[1]:.2f})")
+                            #print(f"Updated active target ID {marker_id} at ({center[0]:.2f}, {center[1]:.2f})")
                         else:
                             active_targets[marker_id] = {
                                 'center': center,
@@ -806,6 +805,8 @@ def live_multitracking_px(cardNum, picam2, track_id, track_vel_id=0, csv_path="s
 
             # Extrapolate current target's position
             elapsed = current_time - current_target['time']
+            #print(f"elapsed time {elapsed:.3f}s")
+            print(f"current time {current_time:.3f}s, target time {current_target['time']:.3f}s")
             extrapolated_center = current_target['center'] + shared_velocity * elapsed
             extrapolated_x, extrapolated_y = extrapolated_center
 
@@ -845,77 +846,103 @@ def targets_detection(last_camera_read_time, last_center_track_vel_id, shared_ve
     """
     Detection process: Updates centers, corners, IDs, and velocity in shared memory.
     """
-    camera_update_interval = 0.2  # Update camera every 0.2 seconds
-    picam2, mtx, dist = pf.init_camera()
+    camera_update_interval = 0.2 #0.1  # Update camera every 0.2 seconds
+    picam2, mtx, dist = pf.init_camera() #ExposureTime = 40000, gain = 2.4
 
 
     while True:
         current_time = time.perf_counter()
 
         # Check if it's time to update from camera (every 0.2s)
-        if current_time - last_camera_read_time.value >= camera_update_interval:
-            with lock:
-                last_camera_read_time.value = current_time
 
-            frame = picam2.capture_array()
-            local_centers, local_ids, local_corners_list, frame = pf.detect_aruco_markers(frame, unit)
+        #frame = picam2.capture_array()
 
-            #small = cv2.resize(frame, (640, 480))
-            #cv2.imshow("Live Camera Feed", small)
+        request = picam2.capture_request()
+        metadata = request.get_metadata() # metadata dict
+        delay = metadata["SensorTimestamp"] * 1e-9 - current_time
+        frame = request.make_array("main") # your image
+        request.release()
+        
+        local_centers, local_ids, local_corners_list, frame = pf.detect_aruco_markers(frame, unit)
+        #print(f"delay equals : {delay} seconds")
+        
+        with lock:
+            last_camera_read_time.value = current_time - delay
+            """
+            Substracting delay to last_camera_read_time makes it wrong in theroy.
+            It is done such that the picam2.capture_array() is taken into account.
+                lag : arr = picam2.capture_array() waits until the next frame and registers it into arr. The total lag is thus lag = waiting time until next frame (wtnf) + process time.
+                Whitout accounting for delay (wich equals wtnf), the informations of positions sent are already late by wtnf seconds. Accounting for delay could be done by already
+                computing the new center swifted by delay * velocity. However, this should be equivalent to just shifting the time reference by that same amount.
+            """
+        #print (f"LAST CAMERA READ VALUE: {last_camera_read_time.value}")       
 
-            # Check for no detections
-            if local_ids is None or len(local_ids) == 0:
-                print(f"No markers detected during camera update. Continuing with last known velocity.")
-                continue
+        #small = cv2.resize(frame, (640, 480))
+        #cv2.imshow("Live Camera Feed", small)
 
-            with lock:
-                # Update shared velocity using reference marker (ID=0)
-                if track_vel_id.value in local_ids:
-                    index_vel_id = np.where(local_ids == track_vel_id.value)[0][0]
-                    corners_vel_id = local_corners_list[index_vel_id].reshape(4, 2)
-                    current_center_vel = np.mean(corners_vel_id, axis=0)  # [x, y]
+        # Check for no detections
+        if local_ids is None or len(local_ids) == 0:
+            print(f"No markers detected during camera update. Continuing with last known velocity.")
+            continue
 
-                    if all(v == 0 for v in last_center_track_vel_id):
-                        last_center_track_vel_id[0] = current_center_vel[0]
-                        last_center_track_vel_id[1] = current_center_vel[1]
-                        last_update_time = current_time  # Local, as it's not shared
-                        print(f"Initial detection of reference ID {track_vel_id.value} at ({current_center_vel[0]:.2f}, {current_center_vel[1]:.2f})")
-                    else:
-                        dt = current_time - last_update_time
-                        if dt > 1e-6:
-                            shared_velocity[0] = (current_center_vel[0] - last_center_track_vel_id[0]) / dt
-                            shared_velocity[1] = (current_center_vel[1] - last_center_track_vel_id[1]) / dt
-                        else:
-                            shared_velocity[0] = 0.0
-                            shared_velocity[1] = 0.0
-                        print(f"Updated shared velocity from reference: ({shared_velocity[0]:.2f}, {shared_velocity[1]:.2f})")
+        with lock:
+            # Update shared velocity using reference marker (ID=0)
+            if track_vel_id.value in local_ids:
+                index_vel_id = np.where(local_ids == track_vel_id.value)[0][0]
+                corners_vel_id = local_corners_list[index_vel_id].reshape(4, 2)
+                current_center_vel = np.mean(corners_vel_id, axis=0)  # [x, y]
+
+                if all(v == 0 for v in last_center_track_vel_id):
                     last_center_track_vel_id[0] = current_center_vel[0]
                     last_center_track_vel_id[1] = current_center_vel[1]
-                    last_update_time = current_time
+                    last_update_time = current_time  # Local, as it's not shared
+                    print(f"Initial detection of reference ID {track_vel_id.value} at ({current_center_vel[0]:.2f}, {current_center_vel[1]:.2f})")
                 else:
-                    print(f"Reference ID {track_vel_id.value} not detected. Using last velocity.")
+                    dt = current_time - last_update_time
+                    print(f"TIME update camera: {current_time:.3f} seconds")
 
-                # Update shared ids, centers, corners_list
-                num_ids = min(len(local_ids), MAX_TARGETS)
-                for i in range(num_ids):
-                    ids[i] = local_ids[i].item()  # Convert to scalar
-                    centers[2*i] = local_centers[i][0]
-                    centers[2*i + 1] = local_centers[i][1]
-                    flat_corners = local_corners_list[i].reshape(-1)
-                    for j in range(8):  # 4 corners * 2 (x,y)
-                        corners_list[8*i + j] = flat_corners[j]
-                # Clear remaining if fewer detected
-                for i in range(num_ids, MAX_TARGETS):
-                    ids[i] = -1  # Invalid ID
+                    if dt > 1e-6:
+                        shared_velocity[0] = (current_center_vel[0] - last_center_track_vel_id[0]) / dt
+                        shared_velocity[1] = (current_center_vel[1] - last_center_track_vel_id[1]) / dt
+                    else:
+                        shared_velocity[0] = 0.0
+                        shared_velocity[1] = 0.0
+                    print(f"Updated shared velocity from reference: ({shared_velocity[0]:.2f}, {shared_velocity[1]:.2f})")
+                last_center_track_vel_id[0] = current_center_vel[0]
+                last_center_track_vel_id[1] = current_center_vel[1]
+                last_update_time = current_time
+            else:
+                print(f"Reference ID {track_vel_id.value} not detected. Using last velocity.")
 
-           
-            if stop_event.is_set():
-                print("Stopping detection process.")
-                cv2.destroyAllWindows()
-                break
+            # Update shared ids, centers, corners_list
+            num_ids = min(len(local_ids), MAX_TARGETS)
+            for i in range(num_ids):
+                ids[i] = local_ids[i].item()  # Convert to scalar
+                centers[2*i] = local_centers[i][0]
+                centers[2*i + 1] = local_centers[i][1]
+                flat_corners = local_corners_list[i].reshape(-1)
+                for j in range(8):  # 4 corners * 2 (x,y)
+                    corners_list[8*i + j] = flat_corners[j]
+            # Clear remaining if fewer detected
+            for i in range(num_ids, MAX_TARGETS):
+                ids[i] = -1  # Invalid ID
 
-            # Sleep a bit to avoid busy loop in detection process
-            time.sleep(camera_update_interval)
+        
+        if stop_event.is_set():
+            print("Stopping detection process.")
+            cv2.destroyAllWindows()
+            break
+
+        # Sleep a bit to avoid busy loop in detection process
+        time_end_process = time.perf_counter()
+        process_time = time_end_process - current_time
+        sleep_time = camera_update_interval - process_time
+
+        if sleep_time<0 :
+            sleep_time = 0.000001
+
+        time.sleep(sleep_time)
+        
 
 def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanner_camera_map.csv"):
     """
@@ -928,8 +955,7 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
     unit = "pixels"
     coord_xy, bit_xy, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale = load_data(unit, csv_path)
     pixel_threshold = 3  # Threshold to detect movement
-    camera_update_interval = 0.2  # Update camera every 0.2 seconds
-    tracking_duration = 0.5 # Track each target for ~1 second
+    tracking_duration = 2 # Track each target for ~1 second
     #shot_timeout = 3.0  # Remove shot targets not seen for 3 seconds
     MAX_TARGETS = 100  # Maximum number of ArUco markers expected
 
@@ -938,14 +964,14 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
     stop_event = Event()
 
     # Shared memory setup
-    last_camera_read_time = Value('d', time.perf_counter() - camera_update_interval)
+    last_camera_read_time = Value('d', time.perf_counter())
     last_center_track_vel_id = Array('d', [0.0, 0.0])
     shared_velocity = Array('d', [0.0, 0.0])  # Shared velocity from reference
     t_vel_id = Value('i', track_vel_id)  # Track ID for reference marker
-    shared_ids = Array('i',  MAX_TARGETS)  # Shared array for detected IDs (-1 invalid)
+    shared_ids = Array('i',  [-1]*MAX_TARGETS)  # Shared array for detected IDs (-1 invalid)
     shared_corners_list = Array('d', [0.0] * (8 * MAX_TARGETS))  # 4 corners * 2 (x,y) per marker
     shared_centers = Array('d', [0.0] * (2 * MAX_TARGETS))  # x,y per marker
-    print(f"shared_ids: {shared_ids[:10]}")  # Debugging output
+    #print(f"shared_ids: {shared_ids[:10]}")  # Debugging output
     lock = Lock()  # Lock for shared access
 
     # Start detection process
@@ -961,116 +987,156 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
     libe1701py.jump_abs(cardNum, 0, 0, 0)
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
     libe1701py.execute(cardNum)
+    try:
+        while True:
+            current_time = time.perf_counter()
 
-    while True:
-        current_time = time.perf_counter()
+            # Read from shared memory
+            with lock:
+                local_ids = [shared_ids[i] for i in range(MAX_TARGETS) if shared_ids[i] != -1]
+                local_centers = [np.array([shared_centers[2*i], shared_centers[2*i + 1]]) for i in range(len(local_ids))]
+                local_corners_list = [np.array([shared_corners_list[8*i + j] for j in range(8)]).reshape(4, 2) for i in range(len(local_ids))]
+                local_shared_velocity = np.array([shared_velocity[0], shared_velocity[1]])
+                local_camera_read_time = last_camera_read_time.value
+                #print(f"CAMERA read time: {local_camera_read_time:.3f} seconds")
+                #print(f"shared_ids: {shared_ids[:10]}")  # Debugging output
 
-        # Read from shared memory
-        with lock:
-            local_ids = [shared_ids[i] for i in range(MAX_TARGETS) if shared_ids[i] != -1]
-            local_centers = [np.array([shared_centers[2*i], shared_centers[2*i + 1]]) for i in range(len(local_ids))]
-            local_corners_list = [np.array([shared_corners_list[8*i + j] for j in range(8)]).reshape(4, 2) for i in range(len(local_ids))]
-            local_shared_velocity = np.array([shared_velocity[0], shared_velocity[1]])
-            print(f"shared_ids: {shared_ids[:10]}")  # Debugging output
+            # Process detected markers (targets are all IDs != track_vel_id)
+            for i, marker_id in enumerate(local_ids):
+                if marker_id != track_vel_id:
+                    center = local_centers[i]
+                    # Update or add to active_targets if not shot
+                    if marker_id not in aruco_shooted:
+
+                        if marker_id in active_targets:
+                            active_targets[marker_id]['center'] = center
+                            active_targets[marker_id]['time'] = local_camera_read_time #current_time
+                            #print(f"Updated active target ID {marker_id} at ({active_targets[marker_id]['center'][0]:.2f}, {active_targets[marker_id]['center'][1]:.2f})")
+                        else:
+                            active_targets[marker_id] = {
+                                'center': center,
+                                'time': local_camera_read_time,
+                                'start_time': None  # Start time set when tracking begins
+                            }
+                            #print(f"Added new target ID {marker_id} at ({center[0]:.2f}, {center[1]:.2f})")
+                    else:
+                        # Update shot target position
+                        aruco_shooted[marker_id]['center'] = center
+                        aruco_shooted[marker_id]['time'] = local_camera_read_time #current_time
+                        #print(f"Updated shot target ID {marker_id} at ({center[0]:.2f}, {center[1]:.2f})")
+
+            #print(f"Difference of time : {time.perf_counter() - current_time}") # Result is ~1e-4 s
+            # Extrapolate positions for active targets not detected
+            detected_ids = set(local_ids)
+            for marker_id in list(active_targets):
+                if marker_id not in detected_ids:
+                    elapsed = time.perf_counter() - active_targets[marker_id]['time'] #local_camera_read_time
+                    active_targets[marker_id]['center'] += local_shared_velocity * elapsed
+                    active_targets[marker_id]['time'] = time.perf_counter() #local_camera_read_time #current_time
             
 
-        # Process detected markers (targets are all IDs != track_vel_id)
-        for i, marker_id in enumerate(local_ids):
-            if marker_id != track_vel_id:
-                center = local_centers[i]
-                # Update or add to active_targets if not shot
-                if marker_id not in aruco_shooted:
-                    if marker_id in active_targets:
-                        active_targets[marker_id]['center'] = center
-                        active_targets[marker_id]['time'] = current_time
-                        print(f"Updated active target ID {marker_id} at ({center[0]:.2f}, {center[1]:.2f})")
-                    else:
-                        active_targets[marker_id] = {
-                            'center': center,
-                            'time': current_time,
-                            'start_time': None  # Start time set when tracking begins
-                        }
-                        print(f"Added new target ID {marker_id} at ({center[0]:.2f}, {center[1]:.2f})")
+            # Scanner update: track the prioritized target if any
+            if active_targets:
+                Start_counting_for_end = time.perf_counter()
+
+                '''
+                # Sort active IDs by x-coordinate based on velocity direction
+                # changer la place du sort active ID (mettre dans la conditions de fin de tracking d'un aruco )
+                active_ids = list(active_targets.keys())
+                if local_shared_velocity[0] > pixel_threshold:
+                    active_ids.sort(key=lambda mid: active_targets[mid]['center'][0], reverse=True)  # Right to left
+                    #print("Prioritizing targets right-to-left (positive x-velocity).")
                 else:
-                    # Update shot target position
-                    aruco_shooted[marker_id]['center'] = center
-                    aruco_shooted[marker_id]['time'] = current_time
-                    #print(f"Updated shot target ID {marker_id} at ({center[0]:.2f}, {center[1]:.2f})")
+                    active_ids.sort(key=lambda mid: active_targets[mid]['center'][0])  # Left to right
+                    #print("Prioritizing targets left-to-right (negative or zero x-velocity).")
 
-        # Extrapolate positions for active targets not detected
-        detected_ids = set(local_ids)
-        for marker_id in list(active_targets):
-            if marker_id not in detected_ids:
-                elapsed = current_time - active_targets[marker_id]['time']
-                active_targets[marker_id]['center'] += local_shared_velocity * elapsed
-                active_targets[marker_id]['time'] = current_time
+                '''
+                active_ids = list(active_targets.keys())
+                current_id = active_ids[0]
+                current_target = active_targets[current_id]
 
-        # Scanner update: track the prioritized target if any
-        if active_targets:
-            Start_counting_for_end = time.perf_counter()
-            # Sort active IDs by x-coordinate based on velocity direction
-            active_ids = list(active_targets.keys())
-            if local_shared_velocity[0] > pixel_threshold:
-                active_ids.sort(key=lambda mid: active_targets[mid]['center'][0], reverse=True)  # Right to left
-                print("Prioritizing targets right-to-left (positive x-velocity).")
+                #print (f"Current target center : x: {current_target['center'][0]} , y: {current_target['center'][1]}")
+                #print(f" ID {current_id} at x: (active_target : {active_targets[current_id]['center'][0]:.2f} | current target : {current_target['center'][0]:.2f}")
+
+                # Set start_time when tracking begins
+                if current_target['start_time'] is None:
+                    current_target['start_time'] = current_time
+                    print(f"Started tracking target ID {current_id} at ({current_target['center'][0]:.2f}, {current_target['center'][1]:.2f})")
+
+                # Check if tracking duration exceeded
+                if current_time - current_target['start_time'] > tracking_duration:
+                    print(f"Finished tracking target ID {current_id} at ({current_target['center'][0]:.2f}, {current_target['center'][1]:.2f}). Moving to shot list.")
+                    
+                    aruco_shooted[current_id] = {
+                        'center': current_target['center'],
+                        'time': local_camera_read_time,
+                        'shot_time': current_time
+                    }
+
+                    del active_targets[current_id]
+
+                    # Sort active IDs by x-coordinate based on velocity direction
+                    # changer la place du sort active ID (mettre dans la conditions de fin de tracking d'un aruco )
+                    active_ids = list(active_targets.keys())
+                    if local_shared_velocity[0] > pixel_threshold:
+                        active_ids.sort(key=lambda mid: active_targets[mid]['center'][0], reverse=True)  # Right to left
+                        #print("Prioritizing targets right-to-left (positive x-velocity).")
+                    else:
+                        active_ids.sort(key=lambda mid: active_targets[mid]['center'][0])  # Left to right
+                        #print("Prioritizing targets left-to-right (negative or zero x-velocity).")
+
+                    continue
+
+                # Extrapolate current target's position
+                elapsed = time.perf_counter() - current_target['time'] #local_camera_read_time current_time
+                #print(f"ELAPSED TIME {elapsed:.6f} seconds.")
+                extrapolated_center = current_target['center'] + local_shared_velocity * elapsed
+                #print(f"Current Target: {current_target['center']} | Displacement : {local_shared_velocity * elapsed}")
+                extrapolated_x, extrapolated_y = extrapolated_center
+
+                #print(f"current time: {current_time:.3f} seconds, active target time : {current_target['time']:.3f} seconds")
+                #print(f"CAMERA read time: {local_camera_read_time:.3f} seconds")
+
+                # Project to bits
+                extrapolated_x_bit, extrapolated_y_bit = project_to_bits(
+                    extrapolated_x, extrapolated_y, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale
+                )
+
+                if extrapolated_x_bit is None or extrapolated_y_bit is None:
+                    print(f"Projection failed for extrapolated center ({extrapolated_x:.2f}, {extrapolated_y:.2f}). Skipping.")
+                    continue
+
+
+                #print(f"TIME SHOOT TARGET: {time.perf_counter():.3f} seconds")
+                # Move scanner
+                libe1701py.jump_abs(cardNum, extrapolated_x_bit, extrapolated_y_bit, 0)
+                libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+                libe1701py.execute(cardNum)
             else:
-                active_ids.sort(key=lambda mid: active_targets[mid]['center'][0])  # Left to right
-                print("Prioritizing targets left-to-right (negative or zero x-velocity).")
+                ENDING_TIME = 1.6
+                if time.perf_counter() - Start_counting_for_end > ENDING_TIME:
+                    print(f"No active targets to track for {ENDING_TIME} seconds. END OF PROGRAM.")
+                    break
 
-            current_id = active_ids[0]
-            current_target = active_targets[current_id]
+                # No targets: Keep laser on but no move
+                #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+                libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+                libe1701py.execute(cardNum)
+                #print("No active targets to track.")
+                #draw_pattern_in_aruco(cardNum, "sandglass", corners, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale, aruco_speed=0, marking_speed = 0)
+                #libe1701py.execute(cardNum)
+                #lc.wait_marking(cardNum)
+            # Sleep for ~0.0001s for fast scanner updates
+            time.sleep(0.000001)
+            
+            process_time_main_loop = time.perf_counter()- current_time
+            #print (f"process time MAIN LOOP = {process_time_main_loop} seconds")
 
-            # Set start_time when tracking begins
-            if current_target['start_time'] is None:
-                current_target['start_time'] = current_time
-                print(f"Started tracking target ID {current_id} at ({current_target['center'][0]:.2f}, {current_target['center'][1]:.2f})")
 
-            # Check if tracking duration exceeded
-            if current_time - current_target['start_time'] > tracking_duration:
-                print(f"Finished tracking target ID {current_id} at ({current_target['center'][0]:.2f}, {current_target['center'][1]:.2f}). Moving to shot list.")
-                aruco_shooted[current_id] = {
-                    'center': current_target['center'],
-                    'time': current_time,
-                    'shot_time': current_time
-                }
-                del active_targets[current_id]
-                continue
-
-            # Extrapolate current target's position
-            elapsed = current_time - current_target['time']
-            extrapolated_center = current_target['center'] + local_shared_velocity * elapsed
-            extrapolated_x, extrapolated_y = extrapolated_center
-
-            # Project to bits
-            extrapolated_x_bit, extrapolated_y_bit = project_to_bits(
-                extrapolated_x, extrapolated_y, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale
-            )
-
-            if extrapolated_x_bit is None or extrapolated_y_bit is None:
-                print(f"Projection failed for extrapolated center ({extrapolated_x:.2f}, {extrapolated_y:.2f}). Skipping.")
-                continue
-
-            # Move scanner
-            libe1701py.jump_abs(cardNum, extrapolated_x_bit, extrapolated_y_bit, 0)
-            libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
-            libe1701py.execute(cardNum)
-        else:
-            if time.perf_counter() - Start_counting_for_end > 4:
-                print("No active targets to track for 4 seconds. END OF PROGRAM.")
-                break
-
-            # No targets: Keep laser on but no move
-            #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
-            libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
-            libe1701py.execute(cardNum)
-            #print("No active targets to track.")
-
-        # Sleep for ~0.0001s for fast scanner updates
-        time.sleep(0.00001)
-
-    libe1701py.close(cardNum)
-    stop_event.set()
-    cam_process.join()  # Ensure camera process is cleaned up
+    finally:
+        libe1701py.close(cardNum)
+        stop_event.set()
+        cam_process.join()  # Ensure camera process is cleaned up
 
 
 
