@@ -134,7 +134,6 @@ def collect_pts_calib_scanner(unit="pixels"):
     print("Calibration data saved to:", output_csv)
     sf.close_all_devices(cardNum, picam2)
 
-
 def plot_points(xy, bit_xy, unit="pixels"):
     """Plot the (x_mm, y_mm) and (bit_x, bit_y) points."""
     plt.figure(figsize=(12, 6))
@@ -201,7 +200,6 @@ def plot_points_mm_bits(xy,bit_xy, unit="pixels"):
     
     plt.tight_layout()
     plt.show()
-
 
 if __name__ == "__main__":
     unit = "pixels"

@@ -87,7 +87,7 @@ def detect_plants(frame, show = False):
 
     return centers, rect
 
-    def bound_rectangles(mask, show = False):
+def bound_rectangles(mask, show = False):
         """
         From a proper mask, will find contour and then bind rectangles to it
         returns the center of the rectangles as well as (x, y) top-left corner and (w, h) width-heigth of the rectagle

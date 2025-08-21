@@ -132,8 +132,6 @@ def detect_aruco_markers(frame, unit = "pixels",  mtx=0, dist=0, marker_length=2
 
     return centers, ids, corners, frame
 
-
-
 def get_spot_coordinates_pixels(frame):
     """Returns the pixel coordinates of the laser spot in the frame."""
     p, max_val = detect_laser_spot(frame)
@@ -145,7 +143,6 @@ def get_spot_coordinates_pixels(frame):
     else:
         print("No laser spot detected.")
         return 0, 0, 0
-
 
 def live_cam(picam):
     """Display live camera feed."""
@@ -162,7 +159,6 @@ def live_cam(picam):
 
     picam.stop()
     cv2.destroyAllWindows()
-
 
 def aruco_detection(picam2, mtx, dist):
     """Detect ArUco markers using Picamera2."""

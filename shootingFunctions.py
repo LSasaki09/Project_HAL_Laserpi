@@ -22,9 +22,6 @@ def close_all_devices(cardNum, picam2):
     cv2.destroyAllWindows()
     print("Laser off. Camera closed.")
 
-
-
-
 def load_data(unit = "pixels",csv_path="scanner_camera_map.csv", SPOT_INTENSITY_TRESHOLD=220):
     """
     Loads data from a CSV file, removes invalid initial lines, 
@@ -80,7 +77,6 @@ def load_data(unit = "pixels",csv_path="scanner_camera_map.csv", SPOT_INTENSITY_
     
     return pts_xy, bit_xy, xy_norm, bit_xy_norm, pt_min, pt_max, bit_scale
 
-
 def project_to_bits(x, y, xy_norm, bit_xy_norm, xy_min, xy_max, bit_scale):
     # Normalize inputs
     x_norm = (x - xy_min[0]) / (xy_max[0] - xy_min[0])
@@ -105,8 +101,6 @@ def project_to_bits(x, y, xy_norm, bit_xy_norm, xy_min, xy_max, bit_scale):
 
     return int(bit_x), int(bit_y)
 
-
-
 def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_norm=None, min_coord=None, max_coord=None, bit_scale=None, aruco_speed=0, marking_speed = 0):
     """
     Draw a pattern within the boundaries defined by an ArUco marker's corners, respecting its orientation.
@@ -127,10 +121,10 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
 
     # Define a unit square for homography mapping (in normalized [0,1]x[0,1] space)
     unit_square = np.array([
-        [0, 0],  # Bottom-left
-        [0, 1],  # Top-left
-        [1, 1],  # Top-right
-        [1, 0]   # Bottom-right
+        [0,1],                        #[0, 0],  # Bottom-left
+        [1,1],                        #[0, 1],  # Top-left
+        [1,0],                        #[1, 1],  # Top-right
+        [0,0]                        #[1, 0]   # Bottom-right
     ], dtype=np.float32)
 
     # Calculate homography from unit square to ArUco marker corners
@@ -218,6 +212,22 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
         # Transform points to marker space
         goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
         goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
+
+    elif pattern_name == "simple_zigzag":
+        x, y = corners[1].tolist()[0], corners[1].tolist()[1]
+        x1, y1 = project_to_bits(x, y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
+        x, y = corners[2].tolist()[0], corners[2].tolist()[1]
+        x2, y2 = project_to_bits(x, y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
+        #if y1 is None or y2 is None:
+        #    Max_wobble_amplitude = 10000
+        #else:
+        Max_wobble_amplitude = int(np.absolute(y1 - y2) * 0.5)
+        libe1701py.set_wobble(cardNum, Max_wobble_amplitude//1000, Max_wobble_amplitude, 250)
+        #libe1701py.execute(cardNum)
+        goal_pts_unit = [[0, 0.5], [1, 0.5]]
+        goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
+        goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
+
     else:
         print(f"Unknown pattern: {pattern_name}. Supported patterns: square, spiral, sandglass, zigzag.")
         return
@@ -228,10 +238,6 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
         print(f"Projection failed for the center ({center_x}, {center_y}).")
         return
 
-    # If aruco has a constant speed, then modify goal_pts accordingly
-    if (marking_speed != 0) and (aruco_speed != 0):
-        goal_pts = create_moving_goal_pts(goal_pts, aruco_speed, marking_speed)
-    
     # Convert pattern points to laser coordinates (bits)
     goal_pts_bits = []
     for x_g, y_g in goal_pts:
@@ -245,15 +251,15 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
 
     # Draw the pattern
-    Max_wobble_amplitude = 10000000
+
+    #Max_wobble_amplitude = 10000000
     for x_bit, y_bit in goal_pts_bits:
-        #libe1701py.set_wobble(cardNum, Max_wobble_amplitude//20, Max_wobble_amplitude//20, 1000)
+        #libe1701py.set_wobble(cardNum, Max_wobble_amplitude//15, Max_wobble_amplitude//15, 1000)
         libe1701py.mark_abs(cardNum, x_bit, y_bit, 0)
 
     #libe1701py.execute(cardNum)
     #lc.wait_marking(cardNum)
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
-
 
 def draw_in_aruco_during_time(cardNum, center_x,center_y,pattern_name, corners,shoot_time = 0.0025,  xy_norm=None, bit_xy_norm=None, min_coord=None, max_coord=None, bit_scale=None, aruco_speed=0, marking_speed = 0):
     """
@@ -273,8 +279,6 @@ def draw_in_aruco_during_time(cardNum, center_x,center_y,pattern_name, corners,s
         draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale, aruco_speed, marking_speed)
         libe1701py.execute(cardNum)
         lc.wait_marking(cardNum)
-
-    
 
 def shoot_target_by_priority_px(cardNum, picam2, csv_path="scanner_camera_map.csv"):
     """
@@ -357,8 +361,6 @@ def shoot_target_by_priority_px(cardNum, picam2, csv_path="scanner_camera_map.cs
         #libe1701py.execute(cardNum)
         #lc.wait_marking(cardNum)
 
-
-
 def go_to_aruco(cardNum, corners_list, unit="mm", pattern_name="square", csv_path="scanner_camera_map.csv"):
     """
     Draw patterns within the boundaries of detected ArUco markers.
@@ -395,8 +397,6 @@ def go_to_aruco(cardNum, corners_list, unit="mm", pattern_name="square", csv_pat
 
     time.sleep(0.1)
     libe1701py.close(cardNum)
-
-
 
 def live_tracking_px_predict(cardNum, picam2, track_id, csv_path="scanner_camera_map.csv"):
     """
@@ -492,8 +492,6 @@ def live_tracking_px_predict(cardNum, picam2, track_id, csv_path="scanner_camera
 
     libe1701py.close(cardNum)
     cv2.destroyAllWindows()
-
-
 
 def live_tracking_px_v2(cardNum, picam2, track_id,track_vel_id=0, csv_path="scanner_camera_map.csv"):
     """
@@ -636,10 +634,6 @@ def live_tracking_px_v2(cardNum, picam2, track_id,track_vel_id=0, csv_path="scan
 
     libe1701py.close(cardNum)
     cv2.destroyAllWindows()
-
-
-
-
 
 def live_multitracking_px(cardNum, picam2, track_id, track_vel_id=0, csv_path="scanner_camera_map.csv"):
     """
@@ -838,9 +832,6 @@ def live_multitracking_px(cardNum, picam2, track_id, track_vel_id=0, csv_path="s
     libe1701py.close(cardNum)
     cv2.destroyAllWindows()
 
-
-
-
 def targets_detection(last_camera_read_time, last_center_track_vel_id, shared_velocity, track_vel_id,
                         ids, corners_list, centers, lock, unit, MAX_TARGETS,stop_event):
     """
@@ -848,7 +839,6 @@ def targets_detection(last_camera_read_time, last_center_track_vel_id, shared_ve
     """
     camera_update_interval = 0.2 #0.1  # Update camera every 0.2 seconds
     picam2, mtx, dist = pf.init_camera() #ExposureTime = 40000, gain = 2.4
-
 
     while True:
         current_time = time.perf_counter()
@@ -943,7 +933,6 @@ def targets_detection(last_camera_read_time, last_center_track_vel_id, shared_ve
 
         time.sleep(sleep_time)
         
-
 def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanner_camera_map.csv"):
     """
     Track multiple unique ArUco markers (all IDs != reference ID 0 are targets) for ~1 second each,
@@ -955,7 +944,7 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
     unit = "pixels"
     coord_xy, bit_xy, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale = load_data(unit, csv_path)
     pixel_threshold = 3  # Threshold to detect movement
-    tracking_duration = 2 # Track each target for ~1 second
+    tracking_duration = 0.5 # Track each target for ~x second
     #shot_timeout = 3.0  # Remove shot targets not seen for 3 seconds
     MAX_TARGETS = 100  # Maximum number of ArUco markers expected
 
@@ -983,6 +972,7 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
     active_targets = {}  # dict {id: {'center': np.array, 'time': float, 'start_time': float or None}}
     aruco_shooted = {}  # dict {id: {'center': np.array, 'time': float, 'shot_time': float}}
 
+    change_target = False
     # Turn on the laser at initial position
     libe1701py.jump_abs(cardNum, 0, 0, 0)
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
@@ -1005,16 +995,19 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
             for i, marker_id in enumerate(local_ids):
                 if marker_id != track_vel_id:
                     center = local_centers[i]
+                    corners = local_corners_list[i]
                     # Update or add to active_targets if not shot
                     if marker_id not in aruco_shooted:
 
                         if marker_id in active_targets:
                             active_targets[marker_id]['center'] = center
+                            active_targets[marker_id]['corners'] = corners
                             active_targets[marker_id]['time'] = local_camera_read_time #current_time
                             #print(f"Updated active target ID {marker_id} at ({active_targets[marker_id]['center'][0]:.2f}, {active_targets[marker_id]['center'][1]:.2f})")
                         else:
                             active_targets[marker_id] = {
                                 'center': center,
+                                'corners': corners,
                                 'time': local_camera_read_time,
                                 'start_time': None  # Start time set when tracking begins
                             }
@@ -1022,6 +1015,7 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
                     else:
                         # Update shot target position
                         aruco_shooted[marker_id]['center'] = center
+                        aruco_shooted[marker_id]['corners'] = corners
                         aruco_shooted[marker_id]['time'] = local_camera_read_time #current_time
                         #print(f"Updated shot target ID {marker_id} at ({center[0]:.2f}, {center[1]:.2f})")
 
@@ -1032,6 +1026,7 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
                 if marker_id not in detected_ids:
                     elapsed = time.perf_counter() - active_targets[marker_id]['time'] #local_camera_read_time
                     active_targets[marker_id]['center'] += local_shared_velocity * elapsed
+                    active_targets[marker_id]['corners'] += local_shared_velocity * elapsed
                     active_targets[marker_id]['time'] = time.perf_counter() #local_camera_read_time #current_time
             
 
@@ -1069,11 +1064,13 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
                     
                     aruco_shooted[current_id] = {
                         'center': current_target['center'],
+                        'corners': current_target['corners'],
                         'time': local_camera_read_time,
                         'shot_time': current_time
                     }
 
                     del active_targets[current_id]
+                    change_target = True
 
                     # Sort active IDs by x-coordinate based on velocity direction
                     # changer la place du sort active ID (mettre dans la conditions de fin de tracking d'un aruco )
@@ -1091,6 +1088,9 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
                 elapsed = time.perf_counter() - current_target['time'] #local_camera_read_time current_time
                 #print(f"ELAPSED TIME {elapsed:.6f} seconds.")
                 extrapolated_center = current_target['center'] + local_shared_velocity * elapsed
+                extrapolated_corners = current_target['corners'] + local_shared_velocity * elapsed  # Shape: (4, 2)
+
+
                 #print(f"Current Target: {current_target['center']} | Displacement : {local_shared_velocity * elapsed}")
                 extrapolated_x, extrapolated_y = extrapolated_center
 
@@ -1105,15 +1105,25 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
                 if extrapolated_x_bit is None or extrapolated_y_bit is None:
                     print(f"Projection failed for extrapolated center ({extrapolated_x:.2f}, {extrapolated_y:.2f}). Skipping.")
                     continue
-
+                
 
                 #print(f"TIME SHOOT TARGET: {time.perf_counter():.3f} seconds")
                 # Move scanner
-                libe1701py.jump_abs(cardNum, extrapolated_x_bit, extrapolated_y_bit, 0)
-                libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+                if change_target == True:
+                    libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
+                    libe1701py.jump_abs(cardNum, extrapolated_x_bit, extrapolated_y_bit, 0)
+                    libe1701py.execute(cardNum)
+                    time.sleep(0.004) 
+                    change_target = False
+                    print(f"Test Jump to ID: {current_id}")
+                #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
+                #libe1701py.execute(cardNum)
+                draw_pattern_in_aruco(cardNum, "sandglass", extrapolated_corners, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale)
+                
                 libe1701py.execute(cardNum)
+                lc.wait_marking(cardNum)
             else:
-                ENDING_TIME = 1.6
+                ENDING_TIME = 3
                 if time.perf_counter() - Start_counting_for_end > ENDING_TIME:
                     print(f"No active targets to track for {ENDING_TIME} seconds. END OF PROGRAM.")
                     break
@@ -1123,9 +1133,7 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
                 libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_STREAM, "0")
                 libe1701py.execute(cardNum)
                 #print("No active targets to track.")
-                #draw_pattern_in_aruco(cardNum, "sandglass", corners, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale, aruco_speed=0, marking_speed = 0)
-                #libe1701py.execute(cardNum)
-                #lc.wait_marking(cardNum)
+                
             # Sleep for ~0.0001s for fast scanner updates
             time.sleep(0.000001)
             
@@ -1137,8 +1145,6 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
         libe1701py.close(cardNum)
         stop_event.set()
         cam_process.join()  # Ensure camera process is cleaned up
-
-
 
 if __name__ == "__main__":
 

@@ -36,7 +36,6 @@ class TimeoutWatchdog:
     def cancel(self):
         self.cancelled = True
 
-
 if __name__ == "__main__":
     
     unit = "pixels"  # "pixels" or "mm"

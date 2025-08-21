@@ -27,8 +27,6 @@ def on_off_laser (cardNum):
     print("Laser turned on.")
     time.sleep(2)
 
-
-
 if __name__ == "__main__":
 
     # Initialize the camera

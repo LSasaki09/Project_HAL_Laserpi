@@ -33,7 +33,6 @@ class TimeoutWatchdog:
     def cancel(self):
         self.cancelled = True
 
-
 if __name__ == "__main__":
     
     unit = "pixels"  # "pixels" or "mm"
@@ -44,8 +43,8 @@ if __name__ == "__main__":
     #picam2, mtx, dist = pf.init_camera()
 
     #Scanner parameters
-    mark_speed = 2000000 #50000  # Speed for marking in bits per second (max spped = 4294960000)
-    freq = 10000//5 #35 # Frequency for laser in Hz
+    mark_speed = 1000000 #50000  # Speed for marking in bits per second (max spped = 4294960000)
+    freq = 10000//1 #35 # Frequency for laser in Hz
     jump_speed = 4294960000 // 10 # Jump speed in bits per second
     port_name="/dev/ttyACM0"
     csv_path = "scanner_camera_map.csv"

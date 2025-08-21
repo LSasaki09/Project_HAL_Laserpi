@@ -502,13 +502,13 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
         x1, y1 = sf.project_to_bits(x, y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
         x, y = corners[2].tolist()[0], corners[2].tolist()[1]
         x2, y2 = sf.project_to_bits(x, y, xy_norm, bit_xy_norm, min_coord, max_coord, bit_scale)
-        if y1 is None or y2 is None:
-            Max_wobble_amplitude = 30000000
-        else:
-            Max_wobble_amplitude = np.absolute(y1 - y2)
-        libe1701py.set_wobble(cardNum, Max_wobble_amplitude, Max_wobble_amplitude, 250)
-        start_point, end_point = (unit_square[0] + unit_square[1])/2, (unit_square[2] + unit_square[3])/2
-        goal_pts_unit = [start_point, end_point]
+        #if y1 is None or y2 is None:
+        #    Max_wobble_amplitude = 10000
+        #else:
+        Max_wobble_amplitude = int(np.absolute(y1 - y2) * 5)
+        libe1701py.set_wobble(cardNum, Max_wobble_amplitude//1000, Max_wobble_amplitude, 250)
+        libe1701py.execute(cardNum)
+        goal_pts_unit = [[0, 0.5], [1, 0.5]]
         goal_pts_unit = np.array(goal_pts_unit, dtype=np.float32).reshape(-1, 1, 2)
         goal_pts = cv2.perspectiveTransform(goal_pts_unit, h_matrix).reshape(-1, 2).tolist()
 
@@ -521,10 +521,6 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
     if x_center is None or y_center is None:
         print(f"Projection failed for the center ({center_x}, {center_y}).")
         return
-
-    # If aruco has a constant speed, then modify goal_pts accordingly
-    if (marking_speed != 0) and (aruco_speed != 0):
-        goal_pts = create_moving_goal_pts(goal_pts, aruco_speed, marking_speed)
     
     # Convert pattern points to laser coordinates (bits)
     goal_pts_bits = []
@@ -539,13 +535,14 @@ def draw_pattern_in_aruco(cardNum, pattern_name, corners, xy_norm=None, bit_xy_n
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
 
     # Draw the pattern
+    libe1701py.jump_abs(cardNum, goal_pts_bits[0][0], goal_pts_bits[0][1], 0)
+    libe1701py.execute(cardNum)
     for x_bit, y_bit in goal_pts_bits:
         libe1701py.mark_abs(cardNum, x_bit, y_bit, 0)
 
     #libe1701py.execute(cardNum)
     #lc.wait_marking(cardNum)
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "0")
-
 
 if __name__ == "__main__":
     picam2, m, d = pf.init_camera()
@@ -617,7 +614,8 @@ if __name__ == "__main__":
     """
 
     # Test for Draw pattern
-    MAX_SPEED_BITS_MARK = 4294960000 // 200000
+    """
+    MAX_SPEED_BITS_MARK = 4294960000 // 300000
     libe1701py.set_speeds(cardNum, MAX_SPEED_BITS_MARK, MAX_SPEED_BITS_MARK)
     frame = picam2.capture_array()
     pts_xy, bit_xy, xy_n, bit_xy_n, pt_min, pt_max, bit_s = sf.load_data()
@@ -632,5 +630,6 @@ if __name__ == "__main__":
         draw_pattern_in_aruco(cardNum, "simple_zigzag", corners_track_id, xy_norm=xy_n, bit_xy_norm=bit_xy_n, min_coord=pt_min, max_coord=pt_max, bit_scale=bit_s)
         libe1701py.execute(cardNum)
         lc.wait_marking(cardNum)
-
+    """
+    
     sf.close_all_devices(cardNum, picam2)
