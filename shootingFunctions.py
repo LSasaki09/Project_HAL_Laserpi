@@ -837,7 +837,7 @@ def targets_detection(last_camera_read_time, last_center_track_vel_id, shared_ve
     """
     Detection process: Updates centers, corners, IDs, and velocity in shared memory.
     """
-    camera_update_interval = 0.2 #0.1  # Update camera every 0.2 seconds
+    camera_update_interval = 0.1 #0.1  # Update camera every 0.2 seconds
     picam2, mtx, dist = pf.init_camera() #ExposureTime = 40000, gain = 2.4
 
     while True:
@@ -944,7 +944,7 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
     unit = "pixels"
     coord_xy, bit_xy, coord_xy_norm, bit_xy_norm, coord_min, coord_max, bit_scale = load_data(unit, csv_path)
     pixel_threshold = 3  # Threshold to detect movement
-    tracking_duration = 0.5 # Track each target for ~x second
+    tracking_duration = 0.1 # Track each target for ~x second
     #shot_timeout = 3.0  # Remove shot targets not seen for 3 seconds
     MAX_TARGETS = 100  # Maximum number of ArUco markers expected
 
@@ -972,7 +972,8 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
     active_targets = {}  # dict {id: {'center': np.array, 'time': float, 'start_time': float or None}}
     aruco_shooted = {}  # dict {id: {'center': np.array, 'time': float, 'shot_time': float}}
 
-    change_target = False
+    change_target = True
+    tracking_on = True
     # Turn on the laser at initial position
     libe1701py.jump_abs(cardNum, 0, 0, 0)
     #libe1701py.set_laser(cardNum, libe1701py.E170X_COMMAND_FLAG_DIRECT, "1")
@@ -1034,20 +1035,17 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
             if active_targets:
                 Start_counting_for_end = time.perf_counter()
 
-                '''
-                # Sort active IDs by x-coordinate based on velocity direction
-                # changer la place du sort active ID (mettre dans la conditions de fin de tracking d'un aruco )
-                active_ids = list(active_targets.keys())
-                if local_shared_velocity[0] > pixel_threshold:
-                    active_ids.sort(key=lambda mid: active_targets[mid]['center'][0], reverse=True)  # Right to left
-                    #print("Prioritizing targets right-to-left (positive x-velocity).")
-                else:
-                    active_ids.sort(key=lambda mid: active_targets[mid]['center'][0])  # Left to right
-                    #print("Prioritizing targets left-to-right (negative or zero x-velocity).")
-
-                '''
-                active_ids = list(active_targets.keys())
-                current_id = active_ids[0]
+                #if tracking_on:
+                if tracking_on == True:
+                    active_ids = list(active_targets.keys())
+                    if local_shared_velocity[0] > pixel_threshold:
+                        active_ids.sort(key=lambda mid: active_targets[mid]['center'][0], reverse=True)  # Right to left
+                        #print("Prioritizing targets right-to-left (positive x-velocity).")
+                    else:
+                        active_ids.sort(key=lambda mid: active_targets[mid]['center'][0])  # Left to right
+                        #print("Prioritizing targets left-to-right (negative or zero x-velocity).")
+                    current_id = active_ids[0]
+                    tracking_on = False
                 current_target = active_targets[current_id]
 
                 #print (f"Current target center : x: {current_target['center'][0]} , y: {current_target['center'][1]}")
@@ -1071,7 +1069,9 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
 
                     del active_targets[current_id]
                     change_target = True
+                    tracking_on = True 
 
+                    """
                     # Sort active IDs by x-coordinate based on velocity direction
                     # changer la place du sort active ID (mettre dans la conditions de fin de tracking d'un aruco )
                     active_ids = list(active_targets.keys())
@@ -1081,7 +1081,7 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
                     else:
                         active_ids.sort(key=lambda mid: active_targets[mid]['center'][0])  # Left to right
                         #print("Prioritizing targets left-to-right (negative or zero x-velocity).")
-
+                    """
                     continue
 
                 # Extrapolate current target's position
@@ -1106,7 +1106,6 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
                     print(f"Projection failed for extrapolated center ({extrapolated_x:.2f}, {extrapolated_y:.2f}). Skipping.")
                     continue
                 
-
                 #print(f"TIME SHOOT TARGET: {time.perf_counter():.3f} seconds")
                 # Move scanner
                 if change_target == True:
@@ -1139,7 +1138,6 @@ def live_multitracking_multiprocess_px(cardNum, track_vel_id=0, csv_path="scanne
             
             process_time_main_loop = time.perf_counter()- current_time
             #print (f"process time MAIN LOOP = {process_time_main_loop} seconds")
-
 
     finally:
         libe1701py.close(cardNum)
